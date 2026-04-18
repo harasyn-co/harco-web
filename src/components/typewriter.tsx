@@ -7,17 +7,10 @@ const INITIAL_PAUSE = 5000
 const MIN_PAUSE = 3000
 const MAX_PAUSE = 8000
 
-interface TypewriterProps {
-  hideCursor?: boolean
-  frozen?: boolean
-}
-
-export function Typewriter({ hideCursor = false, frozen = false }: TypewriterProps) {
+export function Typewriter({ hideCursor = false }: { hideCursor?: boolean }) {
   const [displayed, setDisplayed] = useState("harco")
   const phraseIndex = useRef(0)
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const frozenRef = useRef(frozen)
-  frozenRef.current = frozen
 
   const randomPause = useCallback(
     () => MIN_PAUSE + Math.random() * (MAX_PAUSE - MIN_PAUSE),
@@ -25,19 +18,12 @@ export function Typewriter({ hideCursor = false, frozen = false }: TypewriterPro
   )
 
   useEffect(() => {
-    if (frozen) {
-      clearTimeout(timeoutRef.current)
-      setDisplayed("harco")
-      phraseIndex.current = 0
-      return
-    }
-
     let cancelled = false
 
     function deleteChars(text: string, onDone: () => void) {
-      if (cancelled || frozenRef.current || text.length === 0) { onDone(); return }
+      if (cancelled || text.length === 0) { onDone(); return }
       timeoutRef.current = setTimeout(() => {
-        if (cancelled || frozenRef.current) return
+        if (cancelled) return
         const next = text.slice(0, -1)
         setDisplayed(next)
         deleteChars(next, onDone)
@@ -45,26 +31,26 @@ export function Typewriter({ hideCursor = false, frozen = false }: TypewriterPro
     }
 
     function typeChars(target: string, index: number, onDone: () => void) {
-      if (cancelled || frozenRef.current || index > target.length) { onDone(); return }
+      if (cancelled || index > target.length) { onDone(); return }
       setDisplayed(target.slice(0, index))
       timeoutRef.current = setTimeout(() => {
-        if (cancelled || frozenRef.current) return
+        if (cancelled) return
         typeChars(target, index + 1, onDone)
       }, TYPE_SPEED)
     }
 
     function cycle(pause: number) {
       timeoutRef.current = setTimeout(() => {
-        if (cancelled || frozenRef.current) return
+        if (cancelled) return
         const current = PHRASES[phraseIndex.current]
         deleteChars(current, () => {
-          if (cancelled || frozenRef.current) return
+          if (cancelled) return
           phraseIndex.current = (phraseIndex.current + 1) % PHRASES.length
           const next = PHRASES[phraseIndex.current]
           timeoutRef.current = setTimeout(() => {
-            if (cancelled || frozenRef.current) return
+            if (cancelled) return
             typeChars(next, 1, () => {
-              if (cancelled || frozenRef.current) return
+              if (cancelled) return
               cycle(randomPause())
             })
           }, 400)
@@ -79,7 +65,7 @@ export function Typewriter({ hideCursor = false, frozen = false }: TypewriterPro
       cancelled = true
       clearTimeout(timeoutRef.current)
     }
-  }, [frozen, randomPause])
+  }, [randomPause])
 
   return (
     <span>

@@ -29,7 +29,7 @@ function App() {
       <div className="fixed inset-0 z-10 flex items-center">
         <div className="pl-[8vw] max-w-[680px] font-mono text-[clamp(1.1rem,2.2vw,1.8rem)] font-normal leading-[1.6] -tracking-[0.02em] text-white/65">
           <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000">
-            <Typewriter hideCursor={isScrolling} frozen={isScrolling} />
+            <Typewriter hideCursor={isScrolling} />
           </div>
           {isScrolling && (
             <div className="mt-4">
