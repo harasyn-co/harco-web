@@ -165,8 +165,8 @@ export function ParticleBackground() {
 
     function resize() {
       dpr = window.devicePixelRatio || 1
-      W = window.innerWidth
-      H = window.innerHeight
+      W = Math.max(window.innerWidth, screen.width || 0)
+      H = Math.max(window.innerHeight, screen.height || 0)
       bgCanvas.width = dtCanvas.width = W * dpr
       bgCanvas.height = dtCanvas.height = H * dpr
       grainCanvas.width = W * dpr
