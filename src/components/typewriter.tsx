@@ -15,7 +15,7 @@ interface TypewriterProps {
 export function Typewriter({ hideCursor = false, frozen = false }: TypewriterProps) {
   const [displayed, setDisplayed] = useState("harco")
   const phraseIndex = useRef(0)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const frozenRef = useRef(frozen)
   frozenRef.current = frozen
 
