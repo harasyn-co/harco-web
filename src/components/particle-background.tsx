@@ -175,6 +175,10 @@ export function ParticleBackground() {
       dtCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
       grainCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
       grainPattern = null
+      bgCtx.fillStyle = "#020203"
+      bgCtx.fillRect(0, 0, W, H)
+      dtCtx.fillStyle = "#020203"
+      dtCtx.fillRect(0, 0, W, H)
     }
 
     function init() {
@@ -185,10 +189,6 @@ export function ParticleBackground() {
           particles.push(new Particle(band, W, H))
         }
       }
-      bgCtx.fillStyle = "#020203"
-      bgCtx.fillRect(0, 0, W, H)
-      dtCtx.fillStyle = "#020203"
-      dtCtx.fillRect(0, 0, W, H)
     }
 
     function regenerateGrain() {
@@ -208,7 +208,13 @@ export function ParticleBackground() {
     }
 
     init()
-    window.addEventListener("resize", init)
+
+    let resizeTimer: ReturnType<typeof setTimeout>
+    function onResize() {
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(resize, 200)
+    }
+    window.addEventListener("resize", onResize)
 
     let lastTime = 0
     let elapsed = 0
@@ -288,7 +294,8 @@ export function ParticleBackground() {
 
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener("resize", init)
+      clearTimeout(resizeTimer)
+      window.removeEventListener("resize", onResize)
     }
   }, [])
 
@@ -296,15 +303,33 @@ export function ParticleBackground() {
     <>
       <canvas
         ref={bgRef}
-        className="fixed -inset-20 w-[calc(100%+160px)] h-[calc(100%+160px)] blur-[55px]"
+        className="fixed blur-[55px]"
+        style={{
+          top: "calc(-5rem - env(safe-area-inset-top, 0px))",
+          right: "calc(-5rem - env(safe-area-inset-right, 0px))",
+          bottom: "calc(-5rem - env(safe-area-inset-bottom, 0px))",
+          left: "calc(-5rem - env(safe-area-inset-left, 0px))",
+        }}
       />
       <canvas
         ref={dtRef}
-        className="fixed -inset-[30px] w-[calc(100%+60px)] h-[calc(100%+60px)] blur-[12px] mix-blend-lighten opacity-15"
+        className="fixed blur-[12px] mix-blend-lighten opacity-15"
+        style={{
+          top: "calc(-30px - env(safe-area-inset-top, 0px))",
+          right: "calc(-30px - env(safe-area-inset-right, 0px))",
+          bottom: "calc(-30px - env(safe-area-inset-bottom, 0px))",
+          left: "calc(-30px - env(safe-area-inset-left, 0px))",
+        }}
       />
       <canvas
         ref={grainRef}
-        className="fixed inset-0 w-full h-full pointer-events-none"
+        className="fixed pointer-events-none"
+        style={{
+          top: "calc(-1px - env(safe-area-inset-top, 0px))",
+          right: "calc(-1px - env(safe-area-inset-right, 0px))",
+          bottom: "calc(-1px - env(safe-area-inset-bottom, 0px))",
+          left: "calc(-1px - env(safe-area-inset-left, 0px))",
+        }}
       />
     </>
   )
