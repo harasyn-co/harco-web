@@ -49,28 +49,42 @@ function App() {
 
   // Moves between views: the current text dissolves into particles, the
   // view changes, and the next view's text assembles from particles.
-  // With a burst point the text explodes outward from it before falling;
-  // otherwise it breaks loose and falls.
-  const go = useCallback(async (next: View, burstFrom?: { x: number; y: number }) => {
+  // Leaving a view: its text breaks loose and falls.
+  const go = useCallback(async (next: View) => {
     if (busy.current) return
     busy.current = true
-    if (content.current && particles.current) await particles.current.dissolve(content.current, burstFrom)
+    if (content.current && particles.current) await particles.current.dissolve(content.current)
     setView(next)
     busy.current = false
   }, [])
   const openList = useCallback(() => setView({ kind: "list" }), [])
   const goHome = useCallback(() => go({ kind: "home" }), [go])
   const goList = useCallback(() => go({ kind: "list" }), [go])
-  const openArticle = useCallback(
-    (slug: string, from: { x: number; y: number }) => go({ kind: "article", slug }, from),
-    [go],
-  )
 
-  // Whenever a list or article mounts, assemble its text from particles.
+  // Opening a post: the list explodes from the click, and the same particles
+  // regroup as the article's text once it mounts.
+  const regroupNext = useRef(false)
+  const openArticle = useCallback(async (slug: string, from: { x: number; y: number }) => {
+    if (busy.current) return
+    busy.current = true
+    if (content.current && particles.current) {
+      regroupNext.current = true
+      await particles.current.explode(content.current, from)
+    }
+    setView({ kind: "article", slug })
+    busy.current = false
+  }, [])
+
+  // Whenever a list or article mounts, bring its text in from particles.
   useEffect(() => {
     if (view.kind === "home") return
     const el = content.current
     if (!el) return
+    if (regroupNext.current) {
+      regroupNext.current = false
+      void particles.current?.regroup(el)
+      return
+    }
     const delay = view.kind === "list" && !reducedMotion ? LIST_DELAY_MS : 0
     const timer = setTimeout(() => { void particles.current?.assemble(el) }, delay)
     return () => clearTimeout(timer)
