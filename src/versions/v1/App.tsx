@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { INSIGHTS } from "./content/insights"
 import { GlyphScene } from "./components/glyph-scene"
 import { FORM } from "./components/glyph-scene-shaders"
+import { InsightArticle } from "./components/insight-article"
 import { InsightsPanel } from "./components/insights-panel"
+import { TextParticles, type TextParticlesHandle } from "./components/text-particles"
 import { Typewriter } from "./components/typewriter"
 import { Wordmark } from "./components/wordmark"
 
@@ -27,20 +29,56 @@ const devParams = import.meta.env.DEV ? new URLSearchParams(window.location.sear
 const hideChrome = !!devParams?.has("poster")
 const openInsightsOnLoad = !!devParams?.has("insights")
 
+type View = { kind: "home" } | { kind: "list" } | { kind: "article"; slug: string }
+
+// Pause after opening insights before the list assembles, so the form has
+// blown apart first.
+const LIST_DELAY_MS = 350
+
 function App() {
   // Null until the first form begins to condense; the tagline types out then.
   const [form, setForm] = useState<number | null>(null)
   const [supported, setSupported] = useState(true)
   const [reducedMotion] = useState(prefersReducedMotion)
-  const [insightsOpen, setInsightsOpen] = useState(openInsightsOnLoad)
+  const [view, setView] = useState<View>(openInsightsOnLoad ? { kind: "list" } : { kind: "home" })
+  const insightsOpen = view.kind !== "home"
   const insightsButton = useRef<HTMLButtonElement>(null)
-  const closeInsights = useCallback(() => setInsightsOpen(false), [])
-  // When the list closes, return focus to the insights button once it's back.
+  const particles = useRef<TextParticlesHandle>(null)
+  const content = useRef<HTMLDivElement>(null)
+  const busy = useRef(false)
+
+  // Moves between views: the current text dissolves into particles, the
+  // view changes, and the next view's text assembles from particles.
+  const go = useCallback(async (next: View) => {
+    if (busy.current) return
+    busy.current = true
+    if (content.current && particles.current) await particles.current.dissolve(content.current)
+    setView(next)
+    busy.current = false
+  }, [])
+  const openList = useCallback(() => setView({ kind: "list" }), [])
+  const goHome = useCallback(() => go({ kind: "home" }), [go])
+  const goList = useCallback(() => go({ kind: "list" }), [go])
+  const openArticle = useCallback((slug: string) => go({ kind: "article", slug }), [go])
+
+  // Whenever a list or article mounts, assemble its text from particles.
+  useEffect(() => {
+    if (view.kind === "home") return
+    const el = content.current
+    if (!el) return
+    const delay = view.kind === "list" && !reducedMotion ? LIST_DELAY_MS : 0
+    const timer = setTimeout(() => { void particles.current?.assemble(el) }, delay)
+    return () => clearTimeout(timer)
+  }, [view, reducedMotion])
+
+  // Back home: return focus to the insights button once it's rendered again.
   const wasOpen = useRef(insightsOpen)
   useEffect(() => {
     if (wasOpen.current && !insightsOpen) insightsButton.current?.focus()
     wasOpen.current = insightsOpen
   }, [insightsOpen])
+
+  const article = view.kind === "article" ? INSIGHTS.find((p) => p.slug === view.slug) : undefined
 
   return (
     <div className="relative h-dvh overflow-hidden">
@@ -74,14 +112,18 @@ function App() {
                 type="button"
                 aria-expanded={false}
                 aria-controls="insights"
-                onClick={() => setInsightsOpen(true)}
+                onClick={openList}
                 className="animate-in fade-in duration-700 shrink-0 cursor-pointer text-white/65 transition-colors hover:text-white/90 focus-visible:text-white/90 focus-visible:outline-none"
               >
                 insights
               </button>
             )}
           </footer>
-          {insightsOpen && <InsightsPanel id="insights" posts={INSIGHTS} onClose={closeInsights} />}
+          {view.kind === "list" && (
+            <InsightsPanel id="insights" posts={INSIGHTS} contentRef={content} onSelect={openArticle} onClose={goHome} />
+          )}
+          {article && <InsightArticle key={article.slug} post={article} contentRef={content} onBack={goList} onClose={goHome} />}
+          <TextParticles ref={particles} reducedMotion={reducedMotion} />
         </>
       )}
     </div>

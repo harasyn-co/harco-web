@@ -1,18 +1,23 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, type Ref } from "react"
+import { formatDate } from "../content/format"
 import type { Insight } from "../content/insights"
 
-const formatDate = (iso: string) =>
-  new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-
-// The list of posts shown over the shattered form. It fades in after a short
-// delay so the form has blown apart first. Clicking anywhere outside the list,
-// or pressing Escape, closes it.
-export function InsightsPanel({ id, posts, onClose }: { id: string; posts: Insight[]; onClose: () => void }) {
+// The list of posts shown over the shattered form. Its content starts hidden
+// and is revealed by the text particles. Choosing a post opens it; clicking
+// anywhere outside the list, or pressing Escape, returns home.
+export function InsightsPanel({
+  id, posts, contentRef, onSelect, onClose,
+}: {
+  id: string
+  posts: Insight[]
+  contentRef: Ref<HTMLDivElement>
+  onSelect: (slug: string) => void
+  onClose: () => void
+}) {
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    headingRef.current?.focus()
+    headingRef.current?.focus({ preventScroll: true })
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -24,7 +29,7 @@ export function InsightsPanel({ id, posts, onClose }: { id: string; posts: Insig
       aria-labelledby={`${id}-heading`}
       className="fixed inset-0 z-20 flex items-center justify-center px-[clamp(20px,3vw,40px)] py-24"
       onClick={(e) => {
-        if (!contentRef.current?.contains(e.target as Node)) onClose()
+        if (!(e.target as Element).closest("[data-insights-content]")) onClose()
       }}
     >
       {/* Soft scrim so the scattered grain doesn't compete with the text. */}
@@ -32,7 +37,7 @@ export function InsightsPanel({ id, posts, onClose }: { id: string; posts: Insig
         aria-hidden
         className="animate-in fade-in duration-700 pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(2,2,3,0.72)_0%,rgba(2,2,3,0.45)_40%,transparent_75%)]"
       />
-      <div ref={contentRef} className="relative animate-in fade-in slide-in-from-bottom-3 fill-mode-both delay-300 duration-700 w-full max-w-[560px] max-h-full overflow-y-auto">
+      <div ref={contentRef} data-insights-content style={{ visibility: "hidden" }} className="relative w-full max-w-[560px] max-h-full overflow-y-auto">
         <h2
           id={`${id}-heading`}
           ref={headingRef}
@@ -44,7 +49,11 @@ export function InsightsPanel({ id, posts, onClose }: { id: string; posts: Insig
         <ol className="space-y-7">
           {posts.map((post) => (
             <li key={post.slug}>
-              <a href={post.href} className="group block focus-visible:outline-none">
+              <a
+                href={post.href}
+                onClick={(e) => { e.preventDefault(); onSelect(post.slug) }}
+                className="group block focus-visible:outline-none"
+              >
                 <p className="font-mono text-[0.75rem] -tracking-[0.02em] text-white/40">
                   <time dateTime={post.date}>{formatDate(post.date)}</time>
                   <span aria-hidden> · </span>
