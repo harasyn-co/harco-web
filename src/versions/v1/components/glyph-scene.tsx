@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react"
 import {
-  BANDS_FRAG, COMPOSITE_FRAG, FORM, FORM_COUNT, FULLSCREEN_VERT, PARTICLE_FRAG, PARTICLE_SIDE,
-  PARTICLE_UPDATE_FRAG, PARTICLE_VERT, SCENE_FRAG, TRAIL_LENGTH,
+  BANDS_FRAG, COMPOSITE_FRAG, CONSTANT_FRAG, DEPOSIT_FRAG, DEPOSIT_VERT, FORM, FORM_COUNT,
+  FULLSCREEN_VERT, PARTICLE_FRAG, PARTICLE_SIDE, PARTICLE_UPDATE_FRAG, PARTICLE_VERT, SCENE_FRAG,
+  TRAIL_LENGTH,
 } from "./glyph-scene-shaders"
 
 const FPS = 30
@@ -20,6 +21,15 @@ const HOLD_STREAMS = 0.12
 // while a form holds.
 const PARTICLE_RATE = 1.4
 const HOLD_PARTICLE_RATE = 0.05
+// Built map: how fast a holding form fills in the gaps particles missed, and
+// how fast it erodes while scattering (per second).
+const HOLD_FILL = 0.35
+const SCATTER_DECAY = 0.6
+// Shatter: how quickly the form blows apart and how quickly it recovers,
+// and how long particles keep rebuilding it afterwards (seconds).
+const SHATTER_IN = 2.2
+const SHATTER_OUT = 0.6
+const REBUILD_TIME = 3
 // Moment shown as a still frame for visitors who prefer reduced motion.
 const STILL_T = 10
 
@@ -167,6 +177,8 @@ interface GlyphSceneProps {
   className?: string
   /** Render a single still frame instead of animating. */
   still?: boolean
+  /** Blow the form apart and keep it scattered until this turns off. */
+  shattered?: boolean
   /** Called with the form that is showing or about to condense. */
   onForm?: (form: number) => void
   /** Called if WebGL2 is unavailable, so the page can show a fallback. */
@@ -181,13 +193,15 @@ interface GlyphSceneProps {
 //
 // In development, `?t=<seconds>` freezes time, `?from=<seconds>` starts the
 // clock at a given moment, and `?form=<0-4>` pins a form.
-export function GlyphScene({ className, still = false, onForm, onUnsupported }: GlyphSceneProps) {
+export function GlyphScene({ className, still = false, shattered = false, onForm, onUnsupported }: GlyphSceneProps) {
   const ref = useRef<HTMLCanvasElement>(null)
   const onFormRef = useRef(onForm)
   const onUnsupportedRef = useRef(onUnsupported)
+  const shatteredRef = useRef(shattered)
   useEffect(() => {
     onFormRef.current = onForm
     onUnsupportedRef.current = onUnsupported
+    shatteredRef.current = shattered
   })
 
   useEffect(() => {
@@ -216,22 +230,34 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
     // works, just without the travelling particles.
     let particleUpdate: WebGLProgram | null = null
     let particleDraw: WebGLProgram | null = null
+    let depositDraw: WebGLProgram | null = null
+    let constant: WebGLProgram | null = null
     if (gl.getExtension("EXT_color_buffer_float")) {
       try {
         particleUpdate = compile(gl, FULLSCREEN_VERT, PARTICLE_UPDATE_FRAG)
         particleDraw = compile(gl, PARTICLE_VERT, PARTICLE_FRAG)
+        depositDraw = compile(gl, DEPOSIT_VERT, DEPOSIT_FRAG)
+        constant = compile(gl, FULLSCREEN_VERT, CONSTANT_FRAG)
       } catch (err) {
         console.error(err)
+        particleUpdate = particleDraw = depositDraw = constant = null
       }
     }
+    // Without particles nothing can deposit, so the form shows by its
+    // condense amount instead.
+    const building = !!(particleUpdate && depositDraw && constant)
     const loc = (p: WebGLProgram, names: string[]) =>
       Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]))
     const su = loc(scene, ["uN", "uTime", "uForm", "uAge", "uSeed", "uLean", "uMaxSteps", "uAccent"])
     const bu = loc(bands, ["uBandRes", "uScreen", "uRect", "uScene", "uTime", "uPresence", "uTrail", "uAccent", "uReservoir"])
     const cu = loc(composite, [
       "uScene", "uAux", "uBands", "uScreen", "uDpr", "uRect", "uTime", "uIntro", "uCondense", "uTrail",
-      "uAccent", "uFlow", "uStreams",
+      "uAccent", "uFlow", "uStreams", "uDeposit", "uBuiltFloor", "uShatter",
     ])
+    const du = depositDraw
+      ? loc(depositDraw, ["uStateA", "uStateB", "uRectN", "uAspect", "uMode", "uDt", "uSplat"])
+      : {}
+    const ku = constant ? loc(constant, ["uValue"]) : {}
     const pu = particleUpdate
       ? loc(particleUpdate, ["uStateA", "uStateB", "uScene", "uRectN", "uAspect", "uTime", "uDt", "uFlow", "uRate"])
       : {}
@@ -268,6 +294,8 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
     const vao = gl.createVertexArray()
     const sceneFb = gl.createFramebuffer()
     const bandFb = gl.createFramebuffer()
+    const depositFb = gl.createFramebuffer()
+    let depositTex: WebGLTexture | null = null
     let colorTex: WebGLTexture | null = null
     let auxTex: WebGLTexture | null = null
     let bandTex: WebGLTexture | null = null
@@ -310,11 +338,16 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
       bandW = Math.max(1, Math.ceil(width / BAND_SCALE))
       bandH = Math.max(1, Math.ceil(height / BAND_SCALE))
 
-      for (const tex of [colorTex, auxTex, bandTex]) if (tex) gl!.deleteTexture(tex)
+      for (const tex of [colorTex, auxTex, bandTex, depositTex]) if (tex) gl!.deleteTexture(tex)
       // Scene colour keeps a full mip chain; blurred levels form the halo.
       colorTex = makeTexture(cells, cells, Math.floor(Math.log2(cells)) + 1)
       auxTex = makeTexture(cells, cells, 1)
       bandTex = makeTexture(bandW, bandH, 1)
+      depositTex = makeTexture(cells, cells, 1)
+      gl!.bindFramebuffer(gl!.FRAMEBUFFER, depositFb)
+      gl!.framebufferTexture2D(gl!.FRAMEBUFFER, gl!.COLOR_ATTACHMENT0, gl!.TEXTURE_2D, depositTex, 0)
+      // A resize loses the built map; restart it at the current build level.
+      gl!.clearBufferfv(gl!.COLOR, 0, [builtLevel, 0, 0, 0])
 
       gl!.bindFramebuffer(gl!.FRAMEBUFFER, sceneFb)
       gl!.framebufferTexture2D(gl!.FRAMEBUFFER, gl!.COLOR_ATTACHMENT0, gl!.TEXTURE_2D, colorTex, 0)
@@ -354,6 +387,60 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
 
     let reportedForm = -1
     let lastT = 0
+    let builtLevel = 0     // rough overall build level, used after a resize
+    let lastFlow = 1
+    let shatter = 0        // eased 0..1
+    let wasShattered = false
+    let burstUntil = -1    // time until which particles burst outward
+    let rebuildUntil = -1  // time until which particles rebuild the form
+
+    // Updates the built map: fill or decay the whole map, then let the
+    // particles deposit or erode. Blending does the accumulation.
+    function updateDeposit(s: ReturnType<typeof timeline>, t: number, dt: number, flow: number, src: { a: WebGLTexture | null; b: WebGLTexture | null }) {
+      gl!.bindFramebuffer(gl!.FRAMEBUFFER, depositFb)
+      gl!.viewport(0, 0, cells, cells)
+      // A new form starts from an empty map.
+      if (lastFlow < 0 && flow >= 0 && !(t < rebuildUntil)) gl!.clearBufferfv(gl!.COLOR, 0, [0, 0, 0, 0])
+      lastFlow = flow
+      gl!.enable(gl!.BLEND)
+      gl!.useProgram(constant)
+      const holding = s.condense >= 1 && flow >= 0
+      const fill = (holding ? HOLD_FILL : 0.04 * s.condense) * dt * (1 - shatter)
+      const keep = 1 - dt * (Math.max(0, -Math.sign(flow)) * SCATTER_DECAY + shatter * 5)
+      if (keep < 1) {
+        gl!.blendFunc(gl!.ZERO, gl!.SRC_COLOR)  // map *= keep
+        gl!.uniform1f(ku.uValue, Math.max(0, keep))
+        gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+      }
+      if (fill > 0) {
+        gl!.blendFunc(gl!.ONE, gl!.ONE)  // map += fill
+        gl!.uniform1f(ku.uValue, fill)
+        gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+      }
+      // Particles deposit (building) or erode (unbuilding).
+      gl!.useProgram(depositDraw)
+      gl!.activeTexture(gl!.TEXTURE3)
+      gl!.bindTexture(gl!.TEXTURE_2D, src.a)
+      gl!.activeTexture(gl!.TEXTURE4)
+      gl!.bindTexture(gl!.TEXTURE_2D, src.b)
+      gl!.uniform1i(du.uStateA, 3)
+      gl!.uniform1i(du.uStateB, 4)
+      gl!.uniform4f(du.uRectN, rect.x / width, rect.y / height, rect.size / width, rect.size / height)
+      gl!.uniform1f(du.uAspect, width / height)
+      gl!.uniform1f(du.uMode, flow >= 0 ? 1 : 2)
+      gl!.uniform1f(du.uDt, dt)
+      gl!.uniform1f(du.uSplat, Math.max(4, cells / 26))
+      if (flow >= 0) {
+        gl!.blendFunc(gl!.ONE, gl!.ONE)
+      } else {
+        gl!.blendEquation(gl!.FUNC_REVERSE_SUBTRACT)
+        gl!.blendFunc(gl!.ONE, gl!.ONE)
+      }
+      gl!.drawArrays(gl!.POINTS, 0, PARTICLE_SIDE * PARTICLE_SIDE)
+      gl!.blendEquation(gl!.FUNC_ADD)
+      gl!.disable(gl!.BLEND)
+      builtLevel = holding ? Math.min(1, builtLevel + fill) : flow < 0 ? builtLevel * keep : Math.max(builtLevel, s.condense * 0.5)
+    }
 
     function draw(t: number) {
       if (!cells) return
@@ -368,6 +455,20 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
       lean.y += (lean.ty - lean.y) * 0.04
       updateTrail(performance.now() / 1000)
       const reservoir = still ? 1 : smoothstep(t / 1.5)
+
+      // Shatter eases in fast and out slowly. Opening bursts particles
+      // outward; closing sends a wave of particles back up to rebuild.
+      const target = shatteredRef.current && !still ? 1 : 0
+      shatter += (target - shatter) * (1 - Math.exp(-dt * (target ? SHATTER_IN : SHATTER_OUT)))
+      if (target && !wasShattered) burstUntil = t + 0.7
+      if (!target && wasShattered) rebuildUntil = t + REBUILD_TIME
+      wasShattered = !!target
+      let flow = s.flow
+      let rate = s.rate
+      if (t < burstUntil) { flow = -2; rate = PARTICLE_RATE * 2 }
+      else if (target) { flow = -1; rate = 0 }
+      else if (t < rebuildUntil) { flow = 1; rate = Math.max(rate, PARTICLE_RATE) }
+      const condense = s.condense * (1 - shatter)
 
       gl!.bindVertexArray(vao)
 
@@ -406,10 +507,11 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
         gl!.uniform1f(pu.uAspect, width / height)
         gl!.uniform1f(pu.uTime, t)
         gl!.uniform1f(pu.uDt, dt)
-        gl!.uniform1f(pu.uFlow, s.flow)
-        gl!.uniform1f(pu.uRate, s.rate)
+        gl!.uniform1f(pu.uFlow, flow)
+        gl!.uniform1f(pu.uRate, rate)
         gl!.drawArrays(gl!.TRIANGLES, 0, 3)
         particleRead = 1 - particleRead
+        if (building) updateDeposit(s, t, dt, flow, particleSets[particleRead])
       }
 
       // Pass 2: background bands at low resolution, bent around the form.
@@ -421,7 +523,7 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
       gl!.uniform2f(bu.uScreen, width, height)
       gl!.uniform3f(bu.uRect, rect.x, rect.y, rect.size)
       gl!.uniform1f(bu.uTime, t)
-      gl!.uniform1f(bu.uPresence, s.condense)
+      gl!.uniform1f(bu.uPresence, condense)
       gl!.uniform4fv(bu.uTrail, trailData)
       gl!.uniform3fv(bu.uAccent, s.accent)
       gl!.uniform1f(bu.uReservoir, reservoir)
@@ -443,11 +545,18 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
       gl!.uniform3f(cu.uRect, rect.x, rect.y, rect.size)
       gl!.uniform1f(cu.uTime, t)
       gl!.uniform1f(cu.uIntro, 1)
-      gl!.uniform1f(cu.uCondense, s.condense)
+      gl!.uniform1f(cu.uCondense, condense)
       gl!.uniform4fv(cu.uTrail, trailData)
       gl!.uniform3fv(cu.uAccent, s.accent)
-      gl!.uniform1f(cu.uFlow, s.flow)
-      gl!.uniform1f(cu.uStreams, s.streams * reservoir * 0.75)
+      gl!.uniform1f(cu.uFlow, flow < 0 ? -1 : 1)
+      gl!.uniform1f(cu.uStreams, (target ? 0 : s.streams) * reservoir * 0.75)
+      gl!.activeTexture(gl!.TEXTURE5)
+      gl!.bindTexture(gl!.TEXTURE_2D, depositTex)
+      gl!.uniform1i(cu.uDeposit, 5)
+      // Still frames, frozen dev time, and devices without particles show
+      // the form by its condense amount rather than by deposits.
+      gl!.uniform1f(cu.uBuiltFloor, still ? 1 : !building || fixedT !== null ? condense : 0)
+      gl!.uniform1f(cu.uShatter, shatter)
       gl!.drawArrays(gl!.TRIANGLES, 0, 3)
 
       // Particles on top, as grain-sized points.
@@ -479,13 +588,14 @@ export function GlyphScene({ className, still = false, onForm, onUnsupported }: 
 
     function release() {
       observer.disconnect()
-      for (const p of [scene, bands, composite, particleUpdate, particleDraw]) if (p) gl!.deleteProgram(p)
+      for (const p of [scene, bands, composite, particleUpdate, particleDraw, depositDraw, constant]) if (p) gl!.deleteProgram(p)
       for (const set of particleSets) {
         gl!.deleteTexture(set.a)
         gl!.deleteTexture(set.b)
         gl!.deleteFramebuffer(set.fb)
       }
-      for (const tex of [colorTex, auxTex, bandTex]) if (tex) gl!.deleteTexture(tex)
+      for (const tex of [colorTex, auxTex, bandTex, depositTex]) if (tex) gl!.deleteTexture(tex)
+      gl!.deleteFramebuffer(depositFb)
       gl!.deleteFramebuffer(sceneFb)
       gl!.deleteFramebuffer(bandFb)
       gl!.deleteVertexArray(vao)

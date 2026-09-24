@@ -1,6 +1,8 @@
-import { useState } from "react"
+import { useCallback, useRef, useState } from "react"
+import { INSIGHTS } from "./content/insights"
 import { GlyphScene } from "./components/glyph-scene"
 import { FORM } from "./components/glyph-scene-shaders"
+import { InsightsPanel } from "./components/insights-panel"
 import { Typewriter } from "./components/typewriter"
 import { Wordmark } from "./components/wordmark"
 
@@ -13,23 +15,29 @@ const PHRASES: Record<number, string> = {
   [FORM.BULB]: "building agentic interaction models",
 }
 
-// TODO: confirm this address before publishing v1.
-const CONTACT_HREF = "mailto:hello@harasyn.co"
-
 // Shown instead of the live scene when WebGL2 is unavailable.
 const POSTER_SRC = "/v1-poster.jpg"
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
-// In development, `?poster` hides the text so a clean poster can be captured.
-const hideChrome = import.meta.env.DEV && new URLSearchParams(window.location.search).has("poster")
+// In development, `?poster` hides the text so a clean poster can be captured,
+// and `?insights` opens the insights list on load.
+const devParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null
+const hideChrome = !!devParams?.has("poster")
+const openInsightsOnLoad = !!devParams?.has("insights")
 
 function App() {
   // Null until the first form begins to condense; the tagline types out then.
   const [form, setForm] = useState<number | null>(null)
   const [supported, setSupported] = useState(true)
   const [reducedMotion] = useState(prefersReducedMotion)
+  const [insightsOpen, setInsightsOpen] = useState(openInsightsOnLoad)
+  const insightsButton = useRef<HTMLButtonElement>(null)
+  const closeInsights = useCallback(() => {
+    setInsightsOpen(false)
+    insightsButton.current?.focus()
+  }, [])
 
   return (
     <div className="relative h-dvh overflow-hidden">
@@ -37,6 +45,7 @@ function App() {
         <GlyphScene
           className="pointer-events-none fixed inset-0 h-full w-full"
           still={reducedMotion}
+          shattered={insightsOpen}
           onForm={setForm}
           onUnsupported={() => setSupported(false)}
         />
@@ -56,13 +65,18 @@ function App() {
             <p className="animate-in fade-in slide-in-from-bottom-2 duration-1000 text-white/65">
               <Typewriter text={form === null ? (supported ? "" : PHRASES[FORM.CELLS]) : PHRASES[form]} animate={!reducedMotion} />
             </p>
-            <a
-              href={CONTACT_HREF}
-              className="animate-in fade-in duration-1000 shrink-0 text-white/65 transition-colors hover:text-white/90 focus-visible:text-white/90 focus-visible:outline-none"
+            <button
+              ref={insightsButton}
+              type="button"
+              aria-expanded={insightsOpen}
+              aria-controls="insights"
+              onClick={() => (insightsOpen ? closeInsights() : setInsightsOpen(true))}
+              className="animate-in fade-in duration-1000 shrink-0 cursor-pointer text-white/65 transition-colors hover:text-white/90 focus-visible:text-white/90 focus-visible:outline-none"
             >
-              contact
-            </a>
+              {insightsOpen ? "close" : "insights"}
+            </button>
           </footer>
+          {insightsOpen && <InsightsPanel id="insights" posts={INSIGHTS} onClose={closeInsights} />}
         </>
       )}
     </div>

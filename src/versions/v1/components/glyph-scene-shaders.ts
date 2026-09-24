@@ -8,6 +8,9 @@
 //  3. COMPOSITE_FRAG runs over the whole screen: dark base, bands, and film
 //     grain. The form is expressed through that same grain, denser and
 //     brighter where the form is. Morphs scatter the form back into grain.
+// Alongside these, GPU particles travel between the reservoir and the form.
+// Arriving particles deposit into a "built" map, and the form only shows
+// where material has landed; departing particles erode it.
 
 export const FULLSCREEN_VERT = /* glsl */ `#version 300 es
 void main() {
@@ -432,6 +435,9 @@ uniform float uCondense;   // 1 = form fully present, 0 = scattered to grain
 uniform vec3 uAccent;      // the current form's accent colour
 uniform float uFlow;       // +1 material rising into the form, -1 falling out
 uniform float uStreams;    // 0..1 strength of the streams
+uniform sampler2D uDeposit; // how much material has landed, per scene texel (.r)
+uniform float uBuiltFloor; // minimum built amount (1 for still frames)
+uniform float uShatter;    // 0..1, the form blown apart while insights are open
 
 out vec4 fragColor;
 
@@ -525,15 +531,21 @@ void main() {
   // dissolving, so the form is always partly made of loose grain.
   float scatter = 1.0 - uCondense;
   float spread = mix(14.0, 1.5, smoothstep(0.15, 0.8, halo))
-               + defocus * 9.0 + st * 40.0 + scatter * scatter * 90.0;
+               + defocus * 9.0 + st * 40.0 + scatter * scatter * 90.0 + uShatter * 70.0;
   vec2 jitter = (vec2(g2, g3) - 0.5) * 2.0 * spread * uDpr / uRect.z;
   vec2 shove = push * 26.0 * uDpr / uRect.z;  // specks pushed away from the pointer
   // While scattering, the form's grain also sinks back towards the bottom.
   float sink = uFlow < 0.0 ? scatter * sqrt(scatter) * 0.22 * (0.4 + g4) : 0.0;
-  vec4 form = readForm(uv + jitter - shove + vec2(0.0, sink));
+  // Shattering blows the grain outward from the centre of the form.
+  vec2 fromCentre = uv - 0.5;
+  vec2 burst = fromCentre / max(length(fromCentre), 0.05) * uShatter * uShatter * (0.08 + 0.3 * g2);
+  vec2 at = uv + jitter - shove + vec2(0.0, sink) - burst;
+  vec4 form = readForm(at);
   vec3 col = form.rgb;
-  float v = form.a * pow(uCondense, 1.3);
-  halo *= uCondense;
+  // The form only shows where particles have deposited material.
+  float built = inScene(at) ? max(texture(uDeposit, at).r, uBuiltFloor) : 0.0;
+  float v = form.a * smoothstep(0.04, 0.8, built);
+  halo *= inScene(uv) ? smoothstep(0.0, 0.6, max(texture(uDeposit, uv).r, uBuiltFloor)) : 0.0;
 
   // The lower part of the form breaks back down into grain.
   float yDown = 1.0 - uv.y;
@@ -630,6 +642,7 @@ uniform float uTime;
 uniform float uDt;
 uniform float uFlow;
 uniform float uRate;        // chance per second that a dead particle respawns
+                            // uFlow < -1.5 means a shatter burst
 
 layout(location = 0) out vec4 outA;
 layout(location = 1) out vec4 outB;
@@ -670,6 +683,16 @@ void main() {
           pos = vec2(hash21(seed + 3.0), 0.01 + 0.14 * hash21(seed + 4.0));
           vel = vec2(0.0, 0.05);
           b = vec4(total, total, point);
+        } else if (uFlow < -1.5) {
+          // Shatter: thrown outward from the form's centre.
+          pos = point;
+          vec2 centre = uRectN.xy + uRectN.zw * 0.5;
+          vec2 out_ = (point - centre) * vec2(uAspect, 1.0);
+          out_ = out_ / max(length(out_), 1e-3);
+          vel = out_ * (0.4 + 0.5 * hash21(seed + 3.0));
+          vec2 target = point + out_ / vec2(uAspect, 1.0) * (0.25 + 0.35 * hash21(seed + 4.0));
+          b = vec4(total * 0.6, total * 0.6, target);
+          total *= 0.6;
         } else {
           // From the form, down to the reservoir.
           pos = point;
@@ -740,4 +763,67 @@ precision highp float;
 in vec4 vColor;
 out vec4 fragColor;
 void main() { fragColor = vColor; }
+`
+
+// Deposit pass: particles write into the built map, in scene coordinates.
+// Mode 1 (building): particles close to their target on the form deposit a
+// soft splat there. Mode 2 (unbuilding): particles still over the form erode
+// it where they are, so it comes apart where material leaves.
+export const DEPOSIT_VERT = /* glsl */ `#version 300 es
+precision highp float;
+
+uniform sampler2D uStateA;
+uniform sampler2D uStateB;
+uniform vec4 uRectN;       // scene square in 0..1 screen units
+uniform float uAspect;
+uniform float uMode;
+uniform float uDt;
+uniform float uSplat;      // splat diameter in scene texels
+
+out float vAmount;
+
+void main() {
+  ivec2 cell = ivec2(gl_VertexID % ${PARTICLE_SIDE}, gl_VertexID / ${PARTICLE_SIDE});
+  vec4 a = texelFetch(uStateA, cell, 0);
+  vec4 b = texelFetch(uStateB, cell, 0);
+  vAmount = 0.0;
+  vec2 at = a.xy;
+  if (b.x > 0.0) {
+    if (uMode < 1.5) {
+      float dist = length((b.zw - a.xy) * vec2(uAspect, 1.0));
+      vAmount = smoothstep(0.08, 0.0, dist) * uDt * 3.0;
+      at = b.zw;
+    } else {
+      vAmount = uDt * 2.5;
+    }
+  }
+  vec2 uv = (at - uRectN.xy) / uRectN.zw;
+  if (vAmount <= 0.0 || uv.x < -0.1 || uv.y < -0.1 || uv.x > 1.1 || uv.y > 1.1) {
+    gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
+  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+  gl_PointSize = uSplat;
+}
+`
+
+export const DEPOSIT_FRAG = /* glsl */ `#version 300 es
+precision highp float;
+in float vAmount;
+out vec4 fragColor;
+void main() {
+  vec2 c = gl_PointCoord * 2.0 - 1.0;
+  float r2 = dot(c, c);
+  if (r2 > 1.0) discard;
+  fragColor = vec4(vAmount * exp(-r2 * 3.0));
+}
+`
+
+// Writes a constant; with blending it adds to or scales the built map.
+export const CONSTANT_FRAG = /* glsl */ `#version 300 es
+precision highp float;
+uniform float uValue;
+out vec4 fragColor;
+void main() { fragColor = vec4(uValue); }
 `
