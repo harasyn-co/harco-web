@@ -9,4 +9,4 @@
  * To preview another version locally without changing this file:
  *   SITE_VERSION=v1 npm run dev
  */
-export const liveVersion = "v0"
+export const liveVersion = "v1"
