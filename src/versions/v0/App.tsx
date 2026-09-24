@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
-import { ParticleBackground } from "@/components/particle-background"
-import { Typewriter } from "@/components/typewriter"
+import { ParticleBackground } from "./components/particle-background"
+import { Typewriter } from "./components/typewriter"
 
 const SCROLL_TEXT =
   "Building digital tools that solve real problems without the baggage. One-time prices. No subscriptions. No upsells. Just useful software."
