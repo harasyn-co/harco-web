@@ -11,7 +11,7 @@ export function InsightsPanel({
   id: string
   posts: Insight[]
   contentRef: Ref<HTMLDivElement>
-  onSelect: (slug: string) => void
+  onSelect: (slug: string, from: { x: number; y: number }) => void
   onClose: () => void
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -51,7 +51,7 @@ export function InsightsPanel({
             <li key={post.slug}>
               <a
                 href={post.href}
-                onClick={(e) => { e.preventDefault(); onSelect(post.slug) }}
+                onClick={(e) => { e.preventDefault(); onSelect(post.slug, { x: e.clientX, y: e.clientY }) }}
                 className="group block focus-visible:outline-none"
               >
                 <p className="font-mono text-[0.75rem] -tracking-[0.02em] text-white/40">

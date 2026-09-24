@@ -571,6 +571,8 @@ void main() {
   vec3 streamTint;
   float stream = streams(css, cssScreen, baseCss, uTime, uFlow < 0.0 ? -1.0 : 1.0, streamTint) * uStreams;
   streamTint = mix(streamTint, uAccent, 0.5);
+  // Keep streams close to the page's muted grey, with only a hint of hue.
+  streamTint = mix(vec3(dot(streamTint, vec3(0.3, 0.59, 0.11))), streamTint, 0.35);
 
   float density = clamp(GRAIN_DENSITY + 0.42 * smoothstep(0.0, 0.8, v) + 0.12 * halo + 0.12 * st + 0.5 * stream, 0.0, 0.92);
 
@@ -594,7 +596,7 @@ void main() {
   float grainAlpha = (4.0 + g3 * 14.0) / 255.0;
   float alpha = grainAlpha + st * 0.05;
   if (stream > 0.0) {
-    rgb = mix(rgb, streamTint * 2.4 + 0.08, 0.7);
+    rgb = mix(rgb, streamTint * 2.0 + vec3(0.2, 0.19, 0.18), 0.6);
     alpha = max(alpha, stream * (0.3 + 0.35 * g4));
   }
 
@@ -753,7 +755,10 @@ void main() {
   float k = b.x / max(b.y, 1e-3);  // remaining fraction of life
   float fade = smoothstep(1.0, 0.85, k) * smoothstep(0.0, 0.12, k);
   float alpha = fade * 0.55;
-  vec3 col = mix(vec3(0.82, 0.8, 0.78), uAccent * 2.2 + 0.1, 0.55);
+  // Warm grey like the grain, with only a trace of the form's accent.
+  vec3 tint = uAccent * 2.2 + 0.1;
+  tint = mix(vec3(dot(tint, vec3(0.3, 0.59, 0.11))), tint, 0.3);
+  vec3 col = mix(vec3(0.8, 0.78, 0.75), tint, 0.25);
   vColor = vec4(col * alpha, alpha);
 }
 `

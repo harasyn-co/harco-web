@@ -1,16 +1,25 @@
 import { useImperativeHandle, useRef, type Ref } from "react"
 
 export interface TextParticlesHandle {
-  /** Turns the element's text into particles that drift away, then hides it. */
-  dissolve(el: HTMLElement): Promise<void>
+  /**
+   * Turns the element's text into particles and hides it. With `burstFrom`
+   * (a viewport point) they explode outward from it before gravity takes
+   * over; without it they break loose and fall.
+   */
+  dissolve(el: HTMLElement, burstFrom?: { x: number; y: number }): Promise<void>
   /** Gathers particles into the (hidden) element's text, then reveals it. */
   assemble(el: HTMLElement): Promise<void>
 }
 
 // Upper bound on particles, sampled evenly if the text has more pixels lit.
 const MAX_SPECKS = 18000
-const DISSOLVE_SWEEP = 0.3   // seconds for the dissolve to sweep left to right
-const DISSOLVE_JITTER = 0.2
+// Dissolve physics, in CSS px and seconds.
+const GRAVITY = 1400
+const FALL_STAGGER = 0.35    // lower lines let go first, upper lines after
+const FALL_JITTER = 0.18
+const BURST_SPEED = [220, 620] as const
+const BURST_STAGGER = 0.12   // specks near the burst point leave first
+const DRAG = 1.6
 const ASSEMBLE_TIME = 0.75
 const ASSEMBLE_JITTER = 0.35
 
@@ -78,7 +87,7 @@ export function TextParticles({ ref, reducedMotion }: { ref: Ref<TextParticlesHa
   const frame = useRef(0)
   const pending = useRef<(() => void) | null>(null)
 
-  function run(el: HTMLElement, mode: "in" | "out"): Promise<void> {
+  function run(el: HTMLElement, mode: "in" | "out", burstFrom?: { x: number; y: number }): Promise<void> {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext("2d")
     const reveal = () => { el.style.visibility = mode === "in" ? "visible" : "hidden" }
@@ -97,21 +106,39 @@ export function TextParticles({ ref, reducedMotion }: { ref: Ref<TextParticlesHa
     const image = ctx.createImageData(width, height)
     const pixels = new Uint32Array(image.data.buffer)
 
+    let top = Infinity
+    let bottom = -Infinity
+    for (const p of samples) { top = Math.min(top, p.y); bottom = Math.max(bottom, p.y) }
+    const span = Math.max(1, bottom - top)
+    const maxReach = Math.hypot(width, height)
+
     const specks: Speck[] = samples.map((s) => {
-      const out = mode === "out"
-      return {
-        ...s,
-        sx: out ? s.x : s.x + (Math.random() - 0.5) * 180,
-        sy: out ? s.y : s.y + 30 + Math.random() * 140,
-        px: s.x,
-        py: s.y,
-        vx: (Math.random() - 0.5) * 50,
-        vy: -(10 + Math.random() * 45),
-        delay: out
-          ? (s.x / width) * DISSOLVE_SWEEP + Math.random() * DISSOLVE_JITTER
-          : Math.random() * ASSEMBLE_JITTER,
-        life: out ? 0.6 + Math.random() * 0.5 : ASSEMBLE_TIME,
+      const speck: Speck = {
+        ...s, sx: s.x, sy: s.y, px: s.x, py: s.y, vx: 0, vy: 0, delay: 0, life: ASSEMBLE_TIME,
       }
+      if (mode === "in") {
+        speck.sx = s.x + (Math.random() - 0.5) * 180
+        speck.sy = s.y + 30 + Math.random() * 140
+        speck.delay = Math.random() * ASSEMBLE_JITTER
+      } else if (burstFrom) {
+        // Explode outward from the burst point in all directions.
+        const dx = s.x - burstFrom.x
+        const dy = s.y - burstFrom.y
+        const d = Math.hypot(dx, dy) || 1
+        const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.9
+        const speed = BURST_SPEED[0] + Math.random() * (BURST_SPEED[1] - BURST_SPEED[0])
+        speck.vx = Math.cos(a) * speed
+        speck.vy = Math.sin(a) * speed - 120
+        speck.delay = (d / maxReach) * BURST_STAGGER * 4 + Math.random() * 0.06
+        speck.life = 0.9 + Math.random() * 0.6
+      } else {
+        // Break loose and fall, bottom lines first, with a small sideways kick.
+        speck.vx = (Math.random() - 0.5) * 60
+        speck.vy = Math.random() * 40
+        speck.delay = ((bottom - s.y) / span) * FALL_STAGGER + Math.random() * FALL_JITTER
+        speck.life = 0.8 + Math.random() * 0.5
+      }
+      return speck
     })
     const duration = specks.reduce((m, p) => Math.max(m, p.delay + p.life), 0)
 
@@ -143,13 +170,14 @@ export function TextParticles({ ref, reducedMotion }: { ref: Ref<TextParticlesHa
             const age = t - p.delay
             if (age >= p.life) continue
             if (age > 0) {
-              // Drift up and away with a little turbulence.
-              p.vx += (Math.random() - 0.5) * 120 * dt
-              p.vy -= 40 * dt
+              // Gravity, a little air drag, and a touch of turbulence.
+              p.vy += GRAVITY * dt
+              p.vx -= p.vx * DRAG * dt
+              p.vx += (Math.random() - 0.5) * 40 * dt
               p.px += p.vx * dt
               p.py += p.vy * dt
             }
-            alpha = p.a * Math.pow(1 - Math.max(0, age) / p.life, 1.5)
+            alpha = p.a * Math.pow(1 - Math.max(0, age) / p.life, 1.2)
           } else {
             const k = easeOutCubic(Math.min(1, Math.max(0, (t - p.delay) / p.life)))
             if (k <= 0) continue
@@ -173,7 +201,7 @@ export function TextParticles({ ref, reducedMotion }: { ref: Ref<TextParticlesHa
   }
 
   useImperativeHandle(ref, () => ({
-    dissolve: (el) => run(el, "out"),
+    dissolve: (el, burstFrom) => run(el, "out", burstFrom),
     assemble: (el) => run(el, "in"),
   }))
 
