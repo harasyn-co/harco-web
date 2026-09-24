@@ -29,6 +29,9 @@ const devParams = import.meta.env.DEV ? new URLSearchParams(window.location.sear
 const hideChrome = !!devParams?.has("poster")
 const openInsightsOnLoad = !!devParams?.has("insights")
 
+// The insights link is hidden until the posts are ready.
+const SHOW_INSIGHTS = false
+
 type View = { kind: "home" } | { kind: "list" } | { kind: "article"; slug: string }
 
 // Pause after opening insights before the list assembles, so the form has
@@ -125,7 +128,8 @@ function App() {
             <p className="animate-in fade-in slide-in-from-bottom-2 duration-1000 text-white/65">
               <Typewriter text={form === null ? (supported ? "" : PHRASES[FORM.CELLS]) : PHRASES[form]} animate={!reducedMotion} />
             </p>
-            {!insightsOpen && (
+            {/* Insights is hidden for now. Set SHOW_INSIGHTS to true to bring it back. */}
+            {SHOW_INSIGHTS && !insightsOpen && (
               <button
                 ref={insightsButton}
                 type="button"
