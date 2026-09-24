@@ -5,9 +5,11 @@ const formatDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
 
 // The list of posts shown over the shattered form. It fades in after a short
-// delay so the form has blown apart first.
+// delay so the form has blown apart first. Clicking anywhere outside the list,
+// or pressing Escape, closes it.
 export function InsightsPanel({ id, posts, onClose }: { id: string; posts: Insight[]; onClose: () => void }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     headingRef.current?.focus()
@@ -20,14 +22,17 @@ export function InsightsPanel({ id, posts, onClose }: { id: string; posts: Insig
     <section
       id={id}
       aria-labelledby={`${id}-heading`}
-      className="fixed inset-0 z-10 flex items-center justify-center px-[clamp(20px,3vw,40px)] py-24"
+      className="fixed inset-0 z-20 flex items-center justify-center px-[clamp(20px,3vw,40px)] py-24"
+      onClick={(e) => {
+        if (!contentRef.current?.contains(e.target as Node)) onClose()
+      }}
     >
       {/* Soft scrim so the scattered grain doesn't compete with the text. */}
       <div
         aria-hidden
         className="animate-in fade-in duration-700 pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(2,2,3,0.72)_0%,rgba(2,2,3,0.45)_40%,transparent_75%)]"
       />
-      <div className="relative animate-in fade-in slide-in-from-bottom-3 fill-mode-both delay-300 duration-700 w-full max-w-[560px] max-h-full overflow-y-auto">
+      <div ref={contentRef} className="relative animate-in fade-in slide-in-from-bottom-3 fill-mode-both delay-300 duration-700 w-full max-w-[560px] max-h-full overflow-y-auto">
         <h2
           id={`${id}-heading`}
           ref={headingRef}
@@ -58,6 +63,15 @@ export function InsightsPanel({ id, posts, onClose }: { id: string; posts: Insig
             </li>
           ))}
         </ol>
+        {/* Invisible until focused, so keyboard and screen reader users have a
+            way back besides Escape. */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="sr-only mt-8 font-mono text-[0.8125rem] -tracking-[0.02em] text-white/65 focus-visible:not-sr-only focus-visible:text-white/90 focus-visible:outline-none"
+        >
+          back to home
+        </button>
       </div>
     </section>
   )

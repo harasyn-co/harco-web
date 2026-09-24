@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { INSIGHTS } from "./content/insights"
 import { GlyphScene } from "./components/glyph-scene"
 import { FORM } from "./components/glyph-scene-shaders"
@@ -34,10 +34,13 @@ function App() {
   const [reducedMotion] = useState(prefersReducedMotion)
   const [insightsOpen, setInsightsOpen] = useState(openInsightsOnLoad)
   const insightsButton = useRef<HTMLButtonElement>(null)
-  const closeInsights = useCallback(() => {
-    setInsightsOpen(false)
-    insightsButton.current?.focus()
-  }, [])
+  const closeInsights = useCallback(() => setInsightsOpen(false), [])
+  // When the list closes, return focus to the insights button once it's back.
+  const wasOpen = useRef(insightsOpen)
+  useEffect(() => {
+    if (wasOpen.current && !insightsOpen) insightsButton.current?.focus()
+    wasOpen.current = insightsOpen
+  }, [insightsOpen])
 
   return (
     <div className="relative h-dvh overflow-hidden">
@@ -65,16 +68,18 @@ function App() {
             <p className="animate-in fade-in slide-in-from-bottom-2 duration-1000 text-white/65">
               <Typewriter text={form === null ? (supported ? "" : PHRASES[FORM.CELLS]) : PHRASES[form]} animate={!reducedMotion} />
             </p>
-            <button
-              ref={insightsButton}
-              type="button"
-              aria-expanded={insightsOpen}
-              aria-controls="insights"
-              onClick={() => (insightsOpen ? closeInsights() : setInsightsOpen(true))}
-              className="animate-in fade-in duration-1000 shrink-0 cursor-pointer text-white/65 transition-colors hover:text-white/90 focus-visible:text-white/90 focus-visible:outline-none"
-            >
-              {insightsOpen ? "close" : "insights"}
-            </button>
+            {!insightsOpen && (
+              <button
+                ref={insightsButton}
+                type="button"
+                aria-expanded={false}
+                aria-controls="insights"
+                onClick={() => setInsightsOpen(true)}
+                className="animate-in fade-in duration-700 shrink-0 cursor-pointer text-white/65 transition-colors hover:text-white/90 focus-visible:text-white/90 focus-visible:outline-none"
+              >
+                insights
+              </button>
+            )}
           </footer>
           {insightsOpen && <InsightsPanel id="insights" posts={INSIGHTS} onClose={closeInsights} />}
         </>
