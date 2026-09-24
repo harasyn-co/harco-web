@@ -49,17 +49,22 @@ function App() {
 
   // Moves between views: the current text dissolves into particles, the
   // view changes, and the next view's text assembles from particles.
-  const go = useCallback(async (next: View) => {
+  // With a burst point the text explodes outward from it before falling;
+  // otherwise it breaks loose and falls.
+  const go = useCallback(async (next: View, burstFrom?: { x: number; y: number }) => {
     if (busy.current) return
     busy.current = true
-    if (content.current && particles.current) await particles.current.dissolve(content.current)
+    if (content.current && particles.current) await particles.current.dissolve(content.current, burstFrom)
     setView(next)
     busy.current = false
   }, [])
   const openList = useCallback(() => setView({ kind: "list" }), [])
   const goHome = useCallback(() => go({ kind: "home" }), [go])
   const goList = useCallback(() => go({ kind: "list" }), [go])
-  const openArticle = useCallback((slug: string) => go({ kind: "article", slug }), [go])
+  const openArticle = useCallback(
+    (slug: string, from: { x: number; y: number }) => go({ kind: "article", slug }, from),
+    [go],
+  )
 
   // Whenever a list or article mounts, assemble its text from particles.
   useEffect(() => {
