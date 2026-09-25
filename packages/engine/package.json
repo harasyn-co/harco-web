@@ -1,0 +1,13 @@
+{
+  "name": "@harasyn/engine",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Particle engine: particles gather into shapes, harmonics, math, images and UI.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
