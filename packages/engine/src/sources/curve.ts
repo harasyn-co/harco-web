@@ -7,7 +7,7 @@ import { COMMON_GLSL } from "../glsl/common"
 import { FULLSCREEN_VERT, compile, uniforms } from "../core/gl"
 import type { SdfProgram } from "./sdf"
 
-export type CurveName = "pi-rotation"
+export type CurveName = "phi-rotation"
 
 export interface CurveInfo {
   /** Body of `vec3 curve(float t)`; the result should fit inside radius ~1. */
@@ -20,18 +20,22 @@ export interface CurveInfo {
 }
 
 export const CURVES: Record<CurveName, CurveInfo> = {
-  // Two arms turning at speeds 1 and pi. Pi is irrational, so the curve
-  // never closes: it nearly does after 7 turns (22/7) and very nearly after
-  // 113 (355/113), weaving a denser rosette each time.
-  "pi-rotation": {
+  // Two arms turning at speeds 1 and phi, the golden ratio. Phi is the
+  // hardest number to approximate with fractions; its best tries are ratios
+  // of Fibonacci numbers (3/2, 5/3, 8/5, 13/8...), so the curve only ever
+  // loosely nearly-closes, after 2, 3, 5, 8, 13, 21, 34 and 55 turns, and
+  // weaves an unusually even rosette.
+  "phi-rotation": {
     glsl: `
+  const float PHI = 1.6180339887;
   vec2 a = vec2(cos(t), sin(t));
-  vec2 b = vec2(cos(PI * t), sin(PI * t));
+  vec2 b = vec2(cos(PHI * t), sin(PHI * t));
   return vec3((a + b) * 0.5, 0.0);`,
-    length: 2.0 * Math.PI * 113,
-    duration: 45,
-    label: "π rotation",
+    length: 2.0 * Math.PI * 55,
+    duration: 40,
+    label: "φ rotation",
   },
+
 }
 
 export const CURVE_NAMES = Object.keys(CURVES) as CurveName[]
