@@ -1,4 +1,4 @@
-import { createField, FORMS, FORM_NAMES, type Field, type FormName, type Scene, type ScenePatch } from "@harasyn/engine"
+import { createField, CURVES, CURVE_NAMES, FORMS, FORM_NAMES, type CurveName, type Field, type FormName, type Scene, type ScenePatch } from "@harasyn/engine"
 
 const canvas = document.getElementById("field") as HTMLCanvasElement
 const panel = document.getElementById("panel")!
@@ -59,6 +59,7 @@ const refreshers: (() => void)[] = []
 const scene = () => field.getScene()
 const set = (patch: ScenePatch) => field.set(patch)
 const currentForm = () => { const s = scene().source; return s.type === "shape" ? s.form : ("" as FormName) }
+const currentCurve = () => { const s = scene().source; return s.type === "curve" && s.curve ? s.curve : ("" as CurveName) }
 
 const json = el("pre", { className: "json" })
 const stats = el("p", { className: "stats" })
@@ -72,6 +73,13 @@ panel.append(
       button("Scatter", () => field.scatter()),
       button("Gather", () => field.gather()),
     ]),
+  ),
+  section("Math",
+    segmented(CURVE_NAMES, (c) => CURVES[c].label, currentCurve, (curve) => {
+      // Plane plots read best face-on.
+      set({ camera: { yaw: 0, pitch: 0, spin: 0 }, motion: { autoplay: null } })
+      field.morph({ type: "curve", curve })
+    }),
   ),
   section("Motion",
     segmented(["direct", "reservoir"] as const, (v) => (v === "direct" ? "Slide" : "Via reservoir"), () => scene().motion.via, (via) => set({ motion: { via } })),

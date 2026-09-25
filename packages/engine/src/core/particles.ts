@@ -33,6 +33,7 @@ uniform float uDir;          // +1 gathering, -1 letting go
 uniform vec2 uView;          // half width, half height (world units at z = 0)
 uniform vec2 uCamera;        // camera distance, 1 = perspective
 uniform vec4 uReservoir;     // mode, height (share of the view), opacity, drift
+uniform float uCapture;      // distance at which a particle in flight latches on
 uniform float uReset;        // 1 = put every particle at home
 
 layout(location = 0) out vec4 outPos;
@@ -114,16 +115,15 @@ void main() {
   vec3 to = target - pos;
   float dist = length(to);
 
-  if (wants && attach > 0.5 && dist < 0.25) {
-    // Riding the surface: follow the anchor closely.
-    vec3 next = mix(pos, target, 1.0 - exp(-dt * 30.0));
-    vel = (next - pos) / max(dt, 1e-3);
-    pos = next;
+  if (wants && attach > 0.5 && dist < 0.6) {
+    // Riding the surface: stay on the anchor as it moves.
+    vel = to / max(dt, 1e-3);
+    pos = target;
     attach = min(1.0, attach + dt * 4.0);
   } else if (wants) {
     // In flight: steer towards the anchor, wandering like grains in a current.
     vec3 dir = to / max(dist, 1e-4);
-    float speed = 0.6 + 1.8 * dist;
+    float speed = 0.6 + 1.8 * dist + uCapture * 8.0;
     vec3 swirl = noise33(pos * 1.6 + vec3(0.0, uTime * 0.25, rank * 7.0));
     vec3 desired = dir * speed + cross(dir, swirl) * speed * 0.9 * smoothstep(0.05, 0.6, dist);
     vel = mix(vel, desired, 1.0 - exp(-dt * 3.0));
@@ -131,7 +131,14 @@ void main() {
     // Pull in firmly over the last stretch so particles land.
     float close = smoothstep(0.12, 0.0, dist);
     pos = mix(pos, target, close * (1.0 - exp(-dt * 10.0)));
-    attach = dist < 0.02 ? 1.0 : max(0.0, attach - dt * 3.0);
+    if (dist < uCapture) {
+      // Latch on. Fast-moving anchors (a curve drawing itself) need a wide
+      // reach, or particles would chase them forever.
+      pos = target;
+      attach = 1.0;
+    } else {
+      attach = max(0.0, attach - dt * 3.0);
+    }
   } else {
     attach = max(0.0, attach - dt * 3.0);
     bool band = uReservoir.x > 0.5 && uReservoir.x < 1.5;

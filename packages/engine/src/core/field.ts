@@ -3,6 +3,7 @@
 import { applyPatch, DEFAULT_SCENE, ISOMETRIC_PITCH, type Scene, type ScenePatch, type SourceSpec, type Vec4, type Via } from "../scene"
 import { FORMS, type FormName } from "../sources/forms"
 import { compileSdf, type SdfProgram } from "../sources/sdf"
+import { compileCurve, CURVES, type CurveProgram } from "../sources/curve"
 import { DOTS_FRAG, DOTS_VERT } from "../styles/dots"
 import { RESERVOIR_MODES, UPDATE_FRAG } from "./particles"
 import { bindTextures, compile, FULLSCREEN_VERT, PingPong, uniforms } from "./gl"
@@ -72,13 +73,21 @@ function sideFor(count: Scene["particles"]["count"]) {
   return count === "auto" ? autoSide() : clamp(Math.round(Math.sqrt(count)), 16, 1024)
 }
 
-function sdfBody(source: SourceSpec) {
+function sdfBody(source: Exclude<SourceSpec, { type: "curve" }>) {
   if (source.type === "shape") {
     const form = FORMS[source.form]
     if (!form) throw new Error(`Unknown form "${source.form}". Forms: ${Object.keys(FORMS).join(", ")}`)
     return form.sdf
   }
   return source.glsl
+}
+
+function curveParts(source: Extract<SourceSpec, { type: "curve" }>) {
+  const preset = source.curve ? CURVES[source.curve] : undefined
+  if (source.curve && !preset) throw new Error(`Unknown curve "${source.curve}". Curves: ${Object.keys(CURVES).join(", ")}`)
+  const glsl = source.glsl ?? preset?.glsl
+  if (!glsl) throw new Error("A curve source needs `curve` or `glsl`")
+  return { glsl, length: source.length ?? preset?.length ?? 2 * Math.PI, duration: source.duration ?? preset?.duration ?? 10 }
 }
 
 export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {}): Field {
@@ -91,7 +100,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
   const emit = (event: FieldEvent, detail: unknown) => listeners.get(event)?.forEach((l) => l(detail))
 
   const update = compile(gl, FULLSCREEN_VERT, UPDATE_FRAG)
-  const uu = uniforms(gl, update, ["uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir", "uView", "uCamera", "uReservoir", "uReset"] as const)
+  const uu = uniforms(gl, update, ["uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir", "uView", "uCamera", "uReservoir", "uCapture", "uReset"] as const)
   const dots = compile(gl, DOTS_VERT, DOTS_FRAG)
   const du = uniforms(gl, dots, [
     "uPos", "uNormal", "uModel", "uProj", "uPointSize", "uOpacity", "uSide",
@@ -116,15 +125,20 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
   }
   allocate()
 
-  // Compiled SDF programs, by source code.
-  const programs = new Map<string, SdfProgram>()
-  function programFor(source: SourceSpec) {
-    const body = sdfBody(source)
-    let p = programs.get(body)
-    if (!p) {
-      p = compileSdf(gl!, body)
-      programs.set(body, p)
+  // Compiled source programs, by kind and code.
+  const programs = new Map<string, SdfProgram | CurveProgram>()
+  function programFor(source: SourceSpec): SdfProgram | CurveProgram {
+    if (source.type === "curve") {
+      const { glsl, length, duration } = curveParts(source)
+      const key = `curve:${length}:${duration}:${glsl}`
+      let p = programs.get(key)
+      if (!p) programs.set(key, (p = compileCurve(gl!, glsl, length, duration)))
+      return p
     }
+    const body = sdfBody(source)
+    const key = `sdf:${body}`
+    let p = programs.get(key)
+    if (!p) programs.set(key, (p = compileSdf(gl!, body)))
     return p
   }
 
@@ -139,11 +153,11 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
   let presenceRate = 1
   let dir = 1
   let reseedUntil = -1
-  let pending: { source: SourceSpec; program: SdfProgram; seed: Vec4; resumeAt: number } | null = null
+  let pending: { source: SourceSpec; program: SdfProgram | CurveProgram; seed: Vec4; resumeAt: number } | null = null
   let nextAuto = Infinity
   let started = false
 
-  function activate(source: SourceSpec, program: SdfProgram, seed: Vec4) {
+  function activate(source: SourceSpec, program: SdfProgram | CurveProgram, seed: Vec4) {
     current = { program, seed, since: t }
     scene = { ...scene, source: structuredClone(source) }
     reseedUntil = t + RESEED_CHANGE_TIME
@@ -336,6 +350,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     gl!.uniform4fv(sp.u.uSeed, current.seed)
     gl!.uniform1f(sp.u.uReseed, t < reseedUntil ? RESEED_CHANGE : RESEED_REST)
     gl!.uniform1f(sp.u.uReset, resetAnchors ? 1 : 0)
+    if ("range" in sp) gl!.uniform2f(sp.uRange, sp.range[0], sp.range[1])
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     anchors.swap()
     resetAnchors = false
@@ -358,6 +373,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     gl!.uniform2f(uu.uView, viewVec[0], viewVec[1])
     const r = scene.reservoir
     gl!.uniform4f(uu.uReservoir, RESERVOIR_MODES[r.mode] ?? 1, clamp(r.height, 0, 1), clamp(r.opacity, 0, 1), r.drift)
+    gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : 0.02)
     gl!.uniform1f(uu.uReset, resetParticles ? 1 : 0)
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     particles.swap()

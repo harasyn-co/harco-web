@@ -2,6 +2,7 @@
 // shows. Apps and agents change the field by editing a scene and passing it
 // (or any part of it) to field.set().
 import type { FormName } from "./sources/forms"
+import type { CurveName } from "./sources/curve"
 
 export type Vec4 = [number, number, number, number]
 
@@ -16,6 +17,13 @@ export type SourceSpec =
    * form helpers (rot, smin, vnoise).
    */
   | { type: "sdf"; glsl: string; seed?: Vec4 }
+  /**
+   * A curve that draws itself: particles spread along t in 0..length, and
+   * the drawn range grows to the full length over `duration` seconds. Use a
+   * built-in `curve`, or give `glsl`: the body of `vec3 curve(float t)`,
+   * returning a point inside radius ~1 (it can use PI).
+   */
+  | { type: "curve"; curve?: CurveName; glsl?: string; length?: number; duration?: number; seed?: Vec4 }
 
 export interface Palette {
   /** Page background. */
