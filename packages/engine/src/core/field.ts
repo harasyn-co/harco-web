@@ -91,6 +91,11 @@ export interface Field {
   /** Live rotation in degrees, including spin and dragging. */
   getView(): { yaw: number; pitch: number }
   stats(): FieldStats
+  /**
+   * A JPEG snapshot of the next frame as a data URL, at most `width` CSS px
+   * wide (for thumbnails and previews).
+   */
+  capture(width?: number): Promise<string>
   /** Reads particle state back from the GPU (slow): how many are on the form, in flight, or at rest. */
   debug(): { attached: number; flying: number; resting: number; validAnchors: number }
   on(event: FieldEvent, listener: (detail: unknown) => void): () => void
@@ -479,6 +484,20 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     emit("quality", quality)
   }
 
+  // Snapshots are taken right after a frame is drawn, while its pixels are
+  // still in the drawing buffer.
+  const captures: { width: number; resolve: (url: string) => void }[] = []
+  function flushCaptures() {
+    for (const { width: w, resolve } of captures.splice(0)) {
+      const scale = Math.min(1, w / Math.max(1, canvas.clientWidth))
+      const out = document.createElement("canvas")
+      out.width = Math.max(1, Math.round(canvas.clientWidth * scale))
+      out.height = Math.max(1, Math.round(canvas.clientHeight * scale))
+      out.getContext("2d")!.drawImage(canvas, 0, 0, out.width, out.height)
+      resolve(out.toDataURL("image/jpeg", 0.72))
+    }
+  }
+
   // Frame loop.
   let raf = 0
   let lastT = 0
@@ -594,7 +613,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     gl!.uniform2f(uu.uView, viewVec[0], viewVec[1])
     const r = scene.reservoir
     gl!.uniform4f(uu.uReservoir, RESERVOIR_MODES[r.mode] ?? 1, clamp(r.height, 0, 1), clamp(r.opacity, 0, 1), r.drift)
-    gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : "text" in sp ? 0.05 : 0.02)
+    gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : "text" in sp ? 0.1 : 0.02)
     // Text leaves most particles resting; dim them so the band keeps its usual weight.
     const reserve = clamp(scene.motion.reserve, 0.02, 1)
     const resting = "text" in sp ? Math.max(reserve, 1 - sp.text.density - sp.text.cursor[3]) : reserve
@@ -672,6 +691,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       const ink = st.ascii.color === "shade" ? null : hexToRgb(st.ascii.color)
       gl!.uniform4f(au.uInk, ink?.[0] ?? 0, ink?.[1] ?? 0, ink?.[2] ?? 0, ink ? 1 : 0)
       gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+      flushCaptures()
       return
     }
 
@@ -698,6 +718,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.drawArrays(gl!.LINES, 0, side * side * 2)
     }
     gl!.disable(gl!.BLEND)
+    flushCaptures()
   }
   raf = requestAnimationFrame(step)
 
@@ -709,6 +730,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     scatter,
     gather,
     getView: () => ({ yaw: ((view.yaw % 360) + 360) % 360, pitch: view.pitch }),
+    capture: (w = 240) => new Promise<string>((resolve) => captures.push({ width: w, resolve })),
     stats: () => ({ fps: Math.round(fps), particles: side * side, quality, reducedMotion: reduced, viewScale: Math.round(viewScale * 100) / 100 }),
     debug() {
       const read = (target: { fb: WebGLFramebuffer }, attachment: number) => {

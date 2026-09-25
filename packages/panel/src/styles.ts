@@ -1,12 +1,12 @@
-// The panel's styles, scoped under .hs-studio (and .hs-top, which can live
-// outside it) so they neither leak into nor pick up the host page's styles.
+// The panel's styles, scoped under .hs-studio so they neither leak into nor
+// pick up the host page's styles.
 // A rounded card of dark glass (true black at 65%) whose accent follows the
 // scene's palette (see theme.ts): a bold title with a dim breadcrumb, small uppercase mono labels,
 // pill buttons, and the palette's accent for state and choices.
 export const STUDIO_CSS = /* css */ `
-.hs-studio, .hs-top {
+.hs-studio {
   --hs-card: rgb(0 0 0 / 0.65); --hs-foot: rgb(0 0 0 / 0.3); --hs-sunken: rgb(255 255 255 / 0.05); --hs-raised: rgb(255 255 255 / 0.09);
-  --hs-fg: #f4f3ee; --hs-dim: rgb(244 243 238 / 0.58); --hs-faint: rgb(244 243 238 / 0.38); --hs-line: rgb(255 255 255 / 0.09); --hs-line-strong: rgb(255 255 255 / 0.16);
+  --hs-fg: #f4f3ee; --hs-dim: rgb(244 243 238 / 0.68); --hs-faint: rgb(244 243 238 / 0.5); --hs-line: rgb(255 255 255 / 0.09); --hs-line-strong: rgb(255 255 255 / 0.16);
   --hs-accent: #f0b43c; --hs-accent-bg: rgb(240 180 60 / 0.16); --hs-accent-line: rgb(240 180 60 / 0.45);
   --hs-primary-bg: #f5f4f0; --hs-primary-fg: #121214; --hs-bad: #f07a6e;
   --hs-sans: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
@@ -14,10 +14,10 @@ export const STUDIO_CSS = /* css */ `
   color: var(--hs-fg); text-align: left; letter-spacing: normal; font: 13px/1.45 var(--hs-sans);
   -webkit-font-smoothing: antialiased;
 }
-.hs-studio *, .hs-top * { box-sizing: border-box; font: inherit; letter-spacing: inherit; }
-.hs-studio [hidden], .hs-top [hidden] { display: none !important; }
+.hs-studio * { box-sizing: border-box; font: inherit; letter-spacing: inherit; }
+.hs-studio [hidden], .hs-studio[hidden] { display: none !important; }
 
-/* The card. Floating: over the page. Docked: fills its column. */
+/* The card, floating over the page. */
 .hs-studio {
   position: fixed; top: 20px; right: 20px; z-index: 2147483000; width: 372px; max-height: calc(100% - 40px);
   display: flex; flex-direction: column; overflow: hidden;
@@ -26,41 +26,42 @@ export const STUDIO_CSS = /* css */ `
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 30px 70px rgb(0 0 0 / 0.35);
 }
 .hs-studio.hs-left { right: auto; left: 20px; }
-.hs-studio.hs-docked { position: relative; top: auto; right: auto; width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; z-index: auto; }
 .hs-studio.hs-folded > :not(.hs-head) { display: none; }
 
 /* Head: a bold title with the look's name tucked just under it, and the
    round fold button. */
 .hs-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 14px 22px; border-bottom: 1px solid var(--hs-line); }
 .hs-studio.hs-folded .hs-head { border-bottom: 0; }
-.hs-studio:not(.hs-docked) .hs-head { cursor: grab; touch-action: none; user-select: none; }
+.hs-studio .hs-head { cursor: grab; touch-action: none; user-select: none; }
 .hs-studio.hs-dragging .hs-head { cursor: grabbing; }
 .hs-studio.hs-dragging { transition: none; box-shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 40px 90px rgb(0 0 0 / 0.5); }
-@media (max-width: 600px) { .hs-studio:not(.hs-docked) .hs-head { cursor: default; } }
+@media (max-width: 600px) { .hs-studio .hs-head { cursor: default; } }
 .hs-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .hs-crumb-root { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; color: var(--hs-fg); cursor: pointer; user-select: none; white-space: nowrap; }
-.hs-look-field { position: relative; min-width: 0; }
 .hs-lookname { display: block; color: var(--hs-dim); font-size: 12.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hs-dirty { display: none; }
 .hs-foot .hs-stats { font: 500 10.5px/1 var(--hs-mono) !important; letter-spacing: 0.12em !important; color: var(--hs-dim); text-transform: uppercase; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hs-studio button.hs-fold {
   width: 32px; height: 32px; padding: 0; border-radius: 50%; background: var(--hs-raised); border-color: transparent;
   color: var(--hs-dim); font: 400 16px/1 var(--hs-sans) !important; letter-spacing: 0 !important;
 }
 .hs-studio button.hs-fold:hover { color: var(--hs-fg); background: var(--hs-line-strong); }
+.hs-studio button.hs-fold:disabled { opacity: 0.3; }
+.hs-studio button.hs-fold svg { display: block; margin: auto; }
+.hs-head { gap: 6px; }
+.hs-head .hs-head-text { margin-right: 6px; }
 
 /* Buttons. */
-.hs-studio button, .hs-top button {
+.hs-studio button {
   font: 500 12.5px/1 var(--hs-sans) !important; letter-spacing: normal !important;
   color: var(--hs-fg); background: var(--hs-raised); border: 1px solid var(--hs-line); border-radius: 10px;
   padding: 9px 12px; cursor: pointer; white-space: nowrap; transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.hs-studio button:hover, .hs-top button:hover { border-color: var(--hs-line-strong); background: var(--hs-line-strong); }
-.hs-studio button:focus-visible, .hs-top button:focus-visible { outline: 2px solid var(--hs-accent-line); outline-offset: 2px; }
-.hs-studio button:disabled, .hs-top button:disabled { opacity: 0.4; cursor: default; }
-.hs-studio button.hs-pill, .hs-top button.hs-pill { border-radius: 999px; padding: 10px 16px; }
-.hs-studio button.hs-primary, .hs-top button.hs-primary { background: var(--hs-primary-bg); color: var(--hs-primary-fg); border-color: transparent; }
-.hs-studio button.hs-primary:hover, .hs-top button.hs-primary:hover { background: var(--hs-primary-bg); filter: brightness(0.94); }
+.hs-studio button:hover { border-color: var(--hs-line-strong); background: var(--hs-line-strong); }
+.hs-studio button:focus-visible, .hs-studio input:focus-visible { outline: 2px solid var(--hs-accent-line); outline-offset: 2px; }
+.hs-studio button:disabled { opacity: 0.4; cursor: default; }
+.hs-studio button.hs-pill { border-radius: 999px; padding: 10px 16px; }
+.hs-studio button.hs-primary { background: var(--hs-primary-bg); color: var(--hs-primary-fg); border-color: transparent; }
+.hs-studio button.hs-primary:hover { background: var(--hs-primary-bg); filter: brightness(0.94); }
 .hs-studio button.hs-quiet { background: transparent; border-color: transparent; color: var(--hs-dim); padding: 6px 8px; }
 .hs-studio button.hs-quiet:hover { color: var(--hs-fg); background: var(--hs-raised); }
 
@@ -124,6 +125,24 @@ export const STUDIO_CSS = /* css */ `
 .hs-studio input[type="text"], .hs-studio input[type="password"] { background: var(--hs-sunken); color: var(--hs-fg); border: 1px solid transparent; border-radius: 10px; padding: 9px 11px; }
 .hs-studio input[type="text"]:focus, .hs-studio input[type="password"]:focus { outline: none; border-color: var(--hs-accent-line); }
 
+/* Looks: thumbnail, name, and quiet actions; a row opens under one for
+   renaming or duplicating. */
+.hs-look-item { display: flex; flex-direction: column; }
+.hs-look-item > .hs-row { margin: 6px 0 4px; }
+.hs-studio button.hs-look-name { display: flex; align-items: center; gap: 10px; padding: 5px 10px 5px 5px; }
+.hs-thumb { flex: none; width: 44px; height: 28px; border-radius: 6px; background: var(--hs-sunken) center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--hs-line); }
+
+/* A short note with an action, e.g. autoplay paused. */
+.hs-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--hs-accent-bg); color: var(--hs-fg); font-size: 12.5px; }
+
+/* Custom colours: a label, the hex, and a swatch that opens the picker. */
+.hs-colorrow { display: grid; grid-template-columns: 1fr auto 34px; align-items: center; gap: 10px; margin: 8px 0 0; color: var(--hs-dim); font-size: 12.5px; }
+.hs-hex { font: 11px/1 var(--hs-mono) !important; color: var(--hs-faint); text-transform: uppercase; }
+.hs-color { width: 34px; height: 22px; padding: 0; border: 1px solid var(--hs-line-strong); border-radius: 6px; background: none; cursor: pointer; }
+.hs-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.hs-color::-webkit-color-swatch { border: 0; border-radius: 4px; }
+.hs-color::-moz-color-swatch { border: 0; border-radius: 4px; }
+
 /* Looks. */
 .hs-looks { display: flex; flex-direction: column; gap: 6px; }
 .hs-look { display: flex; align-items: center; gap: 6px; }
@@ -150,12 +169,7 @@ export const STUDIO_CSS = /* css */ `
 .hs-toast { position: absolute; left: 22px; right: 22px; bottom: 76px; padding: 10px 14px; background: var(--hs-primary-bg); color: var(--hs-primary-fg); border-radius: 12px; font-size: 12.5px; opacity: 0; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; box-shadow: 0 8px 24px rgb(0 0 0 / 0.3); }
 .hs-toast.hs-shown { opacity: 1; transform: none; }
 
-/* Docked top bar (unused by the floating card). */
-.hs-top { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #0b0b0c; border-bottom: 1px solid var(--hs-line); min-width: 0; }
-.hs-title { font-weight: 600; white-space: nowrap; }
-.hs-top .hs-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
-
 @media (max-width: 600px) {
-  .hs-studio:not(.hs-docked) { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 60%; border-radius: 20px; }
+  .hs-studio, .hs-studio.hs-left { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 60%; border-radius: 20px; }
 }
 `
