@@ -66,8 +66,13 @@ const currentCurve = () => { const s = scene().source; return s.type === "curve"
 const json = el("pre", { className: "json" })
 const stats = el("p", { className: "stats" })
 
+// Tap the title to fold the panel away, e.g. on a phone.
+const title = el("h1", { textContent: "Engine playground", title: "Show or hide the controls" })
+title.addEventListener("click", () => panel.classList.toggle("folded"))
+if (window.matchMedia("(max-width: 600px)").matches) panel.classList.add("folded")
+
 panel.append(
-  el("h1", { textContent: "Engine playground" }),
+  title,
   stats,
   section("Form",
     segmented(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),

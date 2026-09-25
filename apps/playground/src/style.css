@@ -17,3 +17,7 @@ button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 .slider input { width: 100%; accent-color: var(--fg); }
 .json { margin: 0; max-height: 240px; overflow: auto; font-size: 10.5px; color: var(--dim); white-space: pre; }
 @media (max-width: 600px) { #panel { top: auto; bottom: 16px; left: 16px; right: 16px; width: auto; max-height: 40%; } }
+#panel h1 { cursor: pointer; user-select: none; }
+#panel h1::after { content: " −"; color: var(--dim); }
+#panel.folded h1::after { content: " +"; }
+#panel.folded > :not(h1):not(.stats) { display: none; }
