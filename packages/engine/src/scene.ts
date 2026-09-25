@@ -89,7 +89,7 @@ export interface Scene {
 export type ScenePatch = {
   [K in keyof Scene]?: K extends "source" ? SourceSpec : Scene[K] extends object ? DeepPartial<Scene[K]> : Scene[K]
 }
-type DeepPartial<T> = { [K in keyof T]?: T[K] extends (infer _)[] ? T[K] : T[K] extends object | null ? DeepPartial<T[K]> : T[K] }
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] ? T[K] : T[K] extends object | null ? DeepPartial<T[K]> : T[K] }
 
 export const ISOMETRIC_PITCH = 35.264
 
