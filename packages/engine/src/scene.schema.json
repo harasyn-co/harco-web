@@ -423,7 +423,7 @@
         },
         {
           "type": "object",
-          "description": "Text typed out in particles, always facing the viewer, with a block cursor that blinks once typing is done.",
+          "description": "Text typed out in particles, always facing the viewer, with a block cursor that blinks once typing is done. The letters are pulled out of whatever was showing before, which crumbles away as the line types.",
           "additionalProperties": false,
           "required": [
             "type",
@@ -448,7 +448,7 @@
               "type": "number",
               "minimum": 0.2,
               "maximum": 6,
-              "description": "Width of the text in world units; the forms are about 2 across. Default 1.9."
+              "description": "Width of the text in world units; the forms are about 2 across. Default 2.4."
             },
             "speed": {
               "type": "number",
@@ -459,6 +459,12 @@
             "cursor": {
               "type": "boolean",
               "description": "Show a block cursor after the typed text. Default true."
+            },
+            "density": {
+              "type": "number",
+              "minimum": 0.005,
+              "maximum": 1,
+              "description": "Share of particles that make the letters. Low values let the grain show; high values read as solid type. Default 0.05."
             },
             "seed": {
               "$ref": "#/$defs/seed"

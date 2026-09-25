@@ -34,6 +34,7 @@ uniform vec2 uView;          // half width, half height (world units at z = 0)
 uniform vec2 uCamera;        // camera distance, 1 = perspective
 uniform vec4 uReservoir;     // mode, height (share of the view), opacity, drift
 uniform float uCapture;      // distance at which a particle in flight latches on
+uniform float uRestDim;      // scales resting visibility, so a crowded reservoir isn't brighter
 uniform float uSnap;         // 1 = jump straight to where each particle belongs
 uniform float uReset;        // 1 = put every particle at home
 
@@ -94,6 +95,7 @@ void main() {
   vec4 A = texelFetch(uAnchor, cell, 0);
   vec3 target = uModel * A.xyz;
   Home h = home(id, target);
+  h.vis *= uRestDim;
 
   if (uReset > 0.5 || V.w < 0.5) {
     outPos = vec4(h.p, 0.0);

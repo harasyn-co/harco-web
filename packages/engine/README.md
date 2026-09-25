@@ -65,7 +65,9 @@ fallback. Reduced motion follows the system setting unless given.
 ```
 
 Text types itself out, always facing the viewer, with a block cursor that
-blinks once it's done. `motion.autoplay.forms` takes form names or whole
+blinks once it's done. Its letters are pulled out of whatever was showing
+before, which crumbles away as the line types; `density` (default 0.05) sets
+how many particles make the letters, so the grain shows. `motion.autoplay.forms` takes form names or whole
 sources, so text can sit in the rotation:
 
 ```json

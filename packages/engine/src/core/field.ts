@@ -125,7 +125,7 @@ function curveParts(source: Extract<SourceSpec, { type: "curve" }>) {
 
 const UPDATE_UNIFORMS = [
   "uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir",
-  "uView", "uCamera", "uReservoir", "uCapture", "uSnap", "uReset",
+  "uView", "uCamera", "uReservoir", "uCapture", "uRestDim", "uSnap", "uReset",
 ] as const
 const POINTS_UNIFORMS = [...SHADING_UNIFORMS, "uPointSize", "uGlyphCount", "uGain", "uShape", "uAtlas", "uStride"] as const
 const STREAKS_UNIFORMS = [...SHADING_UNIFORMS, "uTrail"] as const
@@ -237,9 +237,10 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
         p = compileText(gl!, {
           text: source.text,
           font: source.font ?? TEXT_FONT,
-          width: source.width ?? 1.9,
+          width: source.width ?? 2.4,
           speed: source.speed ?? 9,
           cursor: source.cursor ?? true,
+          density: source.density ?? 0.05,
         })
         programs.set(key, p)
       }
@@ -463,6 +464,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   let lastT = 0
   let lastNow = 0
   let fps = 60
+  let restDim = 1
 
   function step(now: number) {
     raf = requestAnimationFrame(step)
@@ -533,7 +535,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     if ("range" in sp) gl!.uniform2f(sp.uRange, sp.range[0], sp.range[1])
     if ("text" in sp) {
       const x = sp.text
-      bindTextures(gl!, 1, [[sp.extra.uPoints, x.points]])
+      bindTextures(gl!, 1, [[sp.extra.uPoints, x.points], [sp.extra.uNormalPrev, anchors.read.textures[1]]])
       gl!.uniformMatrix3fv(sp.extra.uModel, false, model)
       gl!.uniform1f(sp.extra.uPointCount, x.count)
       gl!.uniform1i(sp.extra.uPointsSide, x.side)
@@ -542,6 +544,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.uniform1f(sp.extra.uDelay, x.delay)
       gl!.uniform1fv(sp.extra.uCharX, x.charX)
       gl!.uniform4fv(sp.extra.uCursor, x.cursor)
+      gl!.uniform1f(sp.extra.uDensity, x.density)
     }
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     anchors.swap()
@@ -566,6 +569,11 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     const r = scene.reservoir
     gl!.uniform4f(uu.uReservoir, RESERVOIR_MODES[r.mode] ?? 1, clamp(r.height, 0, 1), clamp(r.opacity, 0, 1), r.drift)
     gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : "text" in sp ? 0.05 : 0.02)
+    // Text leaves most particles resting; dim them so the band keeps its usual weight.
+    const reserve = clamp(scene.motion.reserve, 0.02, 1)
+    const resting = "text" in sp ? Math.max(reserve, 1 - sp.text.density - sp.text.cursor[3]) : reserve
+    restDim += (Math.min(1, reserve / resting) - restDim) * (1 - Math.exp(-dt * 1.5))
+    gl!.uniform1f(uu.uRestDim, restDim)
     gl!.uniform1f(uu.uSnap, snap ? 1 : 0)
     gl!.uniform1f(uu.uReset, resetParticles ? 1 : 0)
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
