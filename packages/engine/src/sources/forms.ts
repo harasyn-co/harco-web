@@ -96,28 +96,45 @@ float fHarmonic(vec3 p, vec4 s) {
   return (r - (0.6 + disp)) * 0.45;
 }
 
-// Mandelbulb: a 3D fractal whose power slowly drifts, so its folds bloom
-// and recede.
-float fBulb(vec3 p, vec4 s) {
-  p *= 1.2;
-  float power = 7.0 + 1.5 * sin(uTime * 0.12 + s.x * 6.0);
-  vec3 z = p;
-  float dr = 1.0;
-  float r = 0.0;
-  for (int i = 0; i < 6; i++) {
-    r = length(z);
-    if (r > 2.0) break;
-    float theta = acos(clamp(z.y / max(r, 1e-5), -1.0, 1.0)) * power;
-    float phi = atan(z.z, z.x) * power;
-    dr = pow(r, power - 1.0) * power * dr + 1.0;
-    z = pow(r, power) * vec3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi)) + p;
-  }
-  return 0.5 * log(max(r, 1e-5)) * r / dr / 1.2;
+// Chladni plate: sand on a vibrating plate gathers where it stays still,
+// along the nodal lines of its vibration mode. Here those lines are raised
+// ridges on a floating square plate inside a thin frame. The plate drifts
+// from one mode to the next, so the lines break and reconnect.
+float chladni(vec2 q, vec2 nm) {
+  return cos(nm.x * PI * q.x) * cos(nm.y * PI * q.y) - cos(nm.y * PI * q.x) * cos(nm.x * PI * q.y);
 }
 
+vec2 chladniMode(float i) {
+  float k = mod(i, 7.0);
+  return k < 1.0 ? vec2(1.0, 3.0) : k < 2.0 ? vec2(2.0, 5.0) : k < 3.0 ? vec2(3.0, 4.0)
+       : k < 4.0 ? vec2(1.0, 5.0) : k < 5.0 ? vec2(3.0, 5.0) : k < 6.0 ? vec2(2.0, 3.0) : vec2(4.0, 5.0);
+}
+
+float fChladni(vec3 p, vec4 s) {
+  // A slight tip, so the plate reads as a solid object.
+  p.yz *= rot(0.12);
+  const float HALF = 0.78;
+  vec2 q = p.xy / HALF;
+  float phase = uTime * 0.1 + s.x * 7.0;
+  float k = smoothstep(0.25, 0.75, fract(phase));
+  vec2 a = chladniMode(floor(phase));
+  vec2 b = chladniMode(floor(phase) + 1.0);
+  float f = mix(chladni(q, a), chladni(q, b), k);
+  const float e = 0.004;
+  vec2 g = vec2(
+    mix(chladni(q + vec2(e, 0.0), a), chladni(q + vec2(e, 0.0), b), k) - f,
+    mix(chladni(q + vec2(0.0, e), a), chladni(q + vec2(0.0, e), b), k) - f) / e;
+  // Distance to the nodal lines, in plate units, then to a ridge along them.
+  float line = abs(f) / max(length(g), 0.5) * HALF;
+  float ridge = length(vec2(line, p.z)) - 0.022;
+  vec2 box = abs(q) - 1.0;
+  float inside = max(box.x, box.y) * HALF;
+  float frame = length(vec2(abs(inside), p.z)) - 0.018;
+  return min(max(ridge, inside), frame);
+}
 `
 
-export type FormName = "cells" | "gyroid" | "knot" | "harmonic" | "bulb"
+export type FormName = "cells" | "gyroid" | "knot" | "harmonic" | "chladni"
 
 export interface FormInfo {
   /** Body of `float sdf(vec3 p)`. */
@@ -132,7 +149,7 @@ export const FORMS: Record<FormName, FormInfo> = {
   gyroid: { sdf: "return fGyroid(p, uSeed);", accent: "#16708c", label: "Gyroid" },
   knot: { sdf: "return fKnot(p, uSeed);", accent: "#22589c", label: "Torus knot" },
   harmonic: { sdf: "return fHarmonic(p, uSeed);", accent: "#5c3c96", label: "Radiolarian" },
-  bulb: { sdf: "return fBulb(p, uSeed);", accent: "#1e3a96", label: "Mandelbulb" },
+  chladni: { sdf: "return fChladni(p, uSeed);", accent: "#1e3a96", label: "Chladni plate" },
 }
 
 export const FORM_NAMES = Object.keys(FORMS) as FormName[]
