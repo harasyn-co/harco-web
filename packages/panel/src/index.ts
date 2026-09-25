@@ -1,12 +1,12 @@
 // @harasyn/panel: a control panel for an engine field. Every scene setting
 // as a control, the scene as editable JSON, and (given stores) saved looks:
 // named scenes that can be loaded, saved, and set as the one an app uses.
-// It either floats over the page, or docks into an app's own layout (the
-// studio): a top bar with the current look and its actions, tabs for Style,
-// Scene, Text, Looks and Code, and a status footer.
+// It either floats over the page, or docks into an app's own layout: a head
+// with the current look, tabs for Style, Scene, Behavior, Text and Looks,
+// and a foot with the look's state and its actions.
 // Meant for development and the studio; apps keep it out of their builds.
 import {
-  CURVES, CURVE_NAMES, FORMS, FORM_NAMES, PALETTES, SCENE_SCHEMA, SceneError,
+  CURVES, CURVE_NAMES, FORMS, FORM_NAMES, PALETTES, SceneError,
   type CurveName, type Field, type FormName, type Palette, type PaletteName, type Scene, type ScenePatch,
 } from "@harasyn/engine"
 import { STUDIO_CSS } from "./styles"
@@ -64,7 +64,9 @@ export interface StudioOptions {
   header?: HTMLElement
   /** Where the status line goes when docked (defaults to the panel's foot). */
   footer?: HTMLElement
-  /** Shown before the title in the panel's head, e.g. a wordmark. */
+  /** Floating panels start in this top corner (and return to it on reset). */
+  corner?: "left" | "right"
+  /** Shown small and centred at the foot of the panel, e.g. a wordmark. */
   brand?: Node
   /** Called with the panel's colours whenever they follow a new palette. */
   onTheme?: (theme: PanelTheme) => void
@@ -113,13 +115,13 @@ const INKS = [
 ] as const
 const LOOK_NAME = /^[a-z0-9][a-z0-9-]*$/
 
-type Tab = "style" | "scene" | "text" | "looks" | "code"
+type Tab = "style" | "scene" | "behavior" | "text" | "looks"
 const TABS: { id: Tab; label: string }[] = [
   { id: "style", label: "Style" },
   { id: "scene", label: "Scene" },
+  { id: "behavior", label: "Behavior" },
   { id: "text", label: "Text" },
   { id: "looks", label: "Looks" },
-  { id: "code", label: "Code" },
 ]
 
 export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
@@ -235,7 +237,7 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     current.name = name
     current.lib = lib
     current.snapshot = JSON.stringify(scene())
-    lookName.value = name
+    lookName.textContent = name || "Default"
   }
   const isDirty = () => JSON.stringify(scene()) !== current.snapshot
 
@@ -245,17 +247,18 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   // Saving goes to the look's own library if it can save, else the first
   // one that can (the site's with the owner key, otherwise this browser's).
   const saveTarget = () => (current.lib?.canSave ? current.lib : siteLib ?? libraries.find((l) => l.canSave) ?? null)
-  function readName() {
-    const n = lookName.value.trim()
-    if (!LOOK_NAME.test(n)) {
-      lookName.focus()
-      throw new Error("Name the look first: lowercase letters, numbers and dashes, e.g. ember-ascii")
+  // Saves under the given name, or the current look's. A look that has no
+  // name yet (the default) is named in the Looks tab first.
+  async function saveLook(makeDefault: boolean, newName?: string) {
+    const name = (newName ?? current.name).trim()
+    if (!name) {
+      showTab("looks")
+      saveAsInput.focus()
+      flash("Name the look to save it")
+      return
     }
-    return n
-  }
-  async function saveLook(makeDefault: boolean) {
-    const name = readName()
-    const lib = makeDefault ? siteLib : saveTarget()
+    if (!LOOK_NAME.test(name)) throw new Error("Look names use lowercase letters, numbers and dashes, e.g. ember-ascii")
+    const lib = makeDefault ? siteLib : newName ? (siteLib ?? libraries.find((l) => l.canSave) ?? null) : saveTarget()
     if (!lib) throw new Error(makeDefault ? "Setting the site's default isn't available here" : "There's nowhere to save looks here")
     await lib.store.save(name, scene(), makeDefault)
     markClean(name, lib)
@@ -269,21 +272,21 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   }
 
   // ---- Top bar ----
-  const lookName = el("input", { type: "text", className: "hs-lookname", placeholder: "Untitled look", spellcheck: false, title: "The look's name: type one to save a new look" })
-  lookName.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void attempt(() => saveLook(false)) } })
+  // The current look's name, or "Default" before one is loaded or saved.
+  const lookName = el("span", { className: "hs-lookname", textContent: "Default", title: "The current look" })
   const dirtyDot = el("span", { className: "hs-dirty", title: "Unsaved changes" })
   // The look's state, as a tag: new (never saved), unsaved changes, or saved.
   const statusTag = el("span", { className: "hs-tag" })
   const showStatus = () => {
     const dirty = isDirty()
     dirtyDot.classList.toggle("hs-shown", dirty)
-    statusTag.textContent = !current.name ? "New" : dirty ? "Unsaved" : "Saved"
-    statusTag.classList.toggle("hs-tag-quiet", !!current.name && !dirty)
+    statusTag.textContent = dirty ? "Unsaved" : current.name ? "Saved" : ""
+    statusTag.classList.toggle("hs-tag-quiet", !dirty)
   }
   refreshers.push(showStatus)
   const saveButton = button("Save", () => saveLook(false), "hs-primary")
   saveButton.classList.add("hs-pill")
-  saveButton.title = "Save this look (⌘S)"
+  saveButton.title = "Save the current look (⌘S); name a new one in Looks"
   const defaultButton = siteLib ? button("Set as site default", () => saveLook(true), "hs-pill") : null
   if (defaultButton) defaultButton.title = "Save this look and make it the site's default"
   const shareButton = options.shareLinks ? button("Share", share, "hs-pill") : null
@@ -340,6 +343,10 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       }),
       row(button("Scatter", () => field.scatter()), button("Gather", () => field.gather())),
     ),
+  ]
+
+  // ---- Behavior: how the form moves, where idle particles wait, the view ----
+  const behaviorTab = [
     group("Motion",
       tiles(["on", "off"] as const, (v) => (v === "on" ? "Autoplay" : "Hold"), () => (scene().motion.autoplay ? "on" : "off"), (v) => {
         // Turning autoplay back on restores the rotation it had, e.g. with text in it.
@@ -470,42 +477,28 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   }
   const renderers: (() => void)[] = []
   const renderAll = () => renderers.forEach((r) => r())
-  const looksTab = [...libraries.map(libraryGroup), ...(options.sections ?? [])]
-
-  // ---- Code: the scene as JSON ----
-  const json = el("textarea", { spellcheck: false, rows: 18, className: "hs-json" })
-  function applyJson() {
-    let patch: ScenePatch
-    try {
-      patch = JSON.parse(json.value)
-    } catch (err) {
-      throw new Error(`Not valid JSON: ${(err as Error).message}`)
-    }
-    applyScene(patch)
-    refresh(true)
-    flash("Applied")
-  }
-  json.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void attempt(applyJson) }
-  })
-  json.addEventListener("focus", () => (problems.textContent = ""))
-  const codeTab = [
-    group("Scene JSON", json, row(
-      button("Apply ⌘↵", applyJson, "hs-primary"),
-      button("Schema", () => {
-        const url = URL.createObjectURL(new Blob([JSON.stringify(SCENE_SCHEMA, null, 2)], { type: "application/json" }))
-        window.open(url, "_blank")
-      }),
-    )),
-  ]
+  // Save as: name a new look (or overwrite one by its name).
+  const saveAsInput = el("input", { type: "text", placeholder: "name, e.g. ember-ascii", spellcheck: false })
+  saveAsInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void attempt(() => saveLook(false, saveAsInput.value)) } })
+  const saveAs = libraries.some((l) => l.canSave)
+    ? [group("Save as",
+        row(saveAsInput),
+        row(
+          button("Save", () => saveLook(false, saveAsInput.value), "hs-primary hs-pill"),
+          ...(siteLib ? [button("Save & set as site default", () => saveLook(true, saveAsInput.value), "hs-pill")] : []),
+        ),
+      )]
+    : []
+  const looksTab = [...saveAs, ...libraries.map(libraryGroup), ...(options.sections ?? [])]
 
   // ---- Assemble ----
   const panes: Record<Tab, HTMLElement> = {
     style: el("div", { className: "hs-pane" }, styleTab),
     scene: el("div", { className: "hs-pane" }, sceneTab),
+    behavior: el("div", { className: "hs-pane" }, behaviorTab),
     text: el("div", { className: "hs-pane" }, textTab),
     looks: el("div", { className: "hs-pane" }, looksTab),
-    code: el("div", { className: "hs-pane" }, codeTab),
+
   }
   const tabBar = el("nav", { className: "hs-tabs", role: "tablist" })
   let activeTab: Tab = "style"
@@ -519,16 +512,78 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     activeTab = id
     tabButtons.forEach(({ id: t, b }) => { b.classList.toggle("hs-on", t === id); b.setAttribute("aria-selected", String(t === id)) })
     for (const [t, pane] of Object.entries(panes)) pane.hidden = t !== id
-    if (id === "code") refresh(true)
   }
 
   const stats = el("div", { className: "hs-stats" })
-  const panel = el("aside", { className: `hs-studio${docked ? " hs-docked" : ""}` })
+  const panel = el("aside", { className: `hs-studio${docked ? " hs-docked" : ""}${options.corner === "left" ? " hs-left" : ""}` })
   const body = el("div", { className: "hs-body" }, [problems, ...Object.values(panes)])
   // Docked: a top bar (title, look, actions) that can live in the app's own
   // header. Floating: a card whose head holds the look and a fold button,
   // with the actions just below it.
   let top: HTMLElement
+  let stopDragging = () => {}
+
+  // Floating panels move by their head: drag to place it anywhere in the
+  // window (kept fully inside, and remembered), double-click to send it back
+  // to its corner (top-left or top-right). A click that doesn't move folds it. Phones keep the sheet.
+  const POSITION_KEY = "harasyn-panel:position"
+  const small = () => window.matchMedia("(max-width: 600px)").matches
+  function place(left: number, topPx: number) {
+    const margin = 8
+    const w = panel.offsetWidth
+    const x = Math.min(Math.max(margin, left), Math.max(margin, window.innerWidth - w - margin))
+    const y = Math.min(Math.max(margin, topPx), Math.max(margin, window.innerHeight - 120))
+    Object.assign(panel.style, { left: `${x}px`, top: `${y}px`, right: "auto", bottom: "auto", maxHeight: `${window.innerHeight - y - margin}px` })
+    return { x, y }
+  }
+  function unplace() {
+    Object.assign(panel.style, { left: "", top: "", right: "", bottom: "", maxHeight: "" })
+  }
+  function makeDraggable(handle: HTMLElement, onClick: () => void) {
+    let drag: { id: number; dx: number; dy: number; x0: number; y0: number; moved: boolean } | null = null
+    const saved = (() => { try { return JSON.parse(localStorage.getItem(POSITION_KEY) ?? "null") } catch { return null } })()
+    if (saved && !small()) place(saved.x, saved.y)
+    const down = (e: PointerEvent) => {
+      if (small() || e.button !== 0 || (e.target as HTMLElement).closest("button")) return
+      const r = panel.getBoundingClientRect()
+      drag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false }
+      handle.setPointerCapture(e.pointerId)
+    }
+    const move = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return
+      if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 4) return
+      drag.moved = true
+      panel.classList.add("hs-dragging")
+      place(e.clientX - drag.dx, e.clientY - drag.dy)
+    }
+    const up = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return
+      const { moved } = drag
+      drag = null
+      panel.classList.remove("hs-dragging")
+      if (!moved) { if ((e.target as HTMLElement).closest(".hs-crumb-root")) onClick(); return }
+      const r = panel.getBoundingClientRect()
+      try { localStorage.setItem(POSITION_KEY, JSON.stringify({ x: r.left, y: r.top })) } catch { /* not remembered */ }
+    }
+    const reset = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest("button")) return
+      unplace()
+      try { localStorage.removeItem(POSITION_KEY) } catch { /* nothing to forget */ }
+    }
+    // Keep it inside the window as the window changes; phones use the sheet.
+    const resize = () => {
+      if (small()) { unplace(); return }
+      if (panel.style.left) place(panel.getBoundingClientRect().left, panel.getBoundingClientRect().top)
+    }
+    handle.addEventListener("pointerdown", down)
+    handle.addEventListener("pointermove", move)
+    handle.addEventListener("pointerup", up)
+    handle.addEventListener("pointercancel", up)
+    handle.addEventListener("dblclick", reset)
+    window.addEventListener("resize", resize)
+    return () => window.removeEventListener("resize", resize)
+  }
+
   if (docked) {
     top = el("div", { className: "hs-top" }, [title, lookField, actions])
     const header = options.header
@@ -545,21 +600,21 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       fold.title = folded ? "Open the panel" : "Fold the panel away"
     }
     fold.addEventListener("click", () => setFolded(!panel.classList.contains("hs-folded")))
-    // Head: the brand and title with the fold button, then the look's name
-    // on its own line. Foot: the look's state, live stats, and actions.
-    const brandRow = el("div", { className: "hs-brandrow" }, [
-      ...(options.brand ? [el("span", { className: "hs-brand" }, [options.brand]), el("span", { className: "hs-brand-rule" })] : []),
-      el("span", { className: "hs-crumb-root", textContent: options.title || "Studio" }),
-    ])
-    brandRow.addEventListener("click", () => setFolded(!panel.classList.contains("hs-folded")))
+    // Head: the title and fold button, with the look's name just under the
+    // title. Foot: the look's state, live stats, and actions, then the brand.
+    const titleEl = el("span", { className: "hs-crumb-root", textContent: options.title || "Studio" })
     top = el("div", { className: "hs-head" }, [
-      el("div", { className: "hs-head-row" }, [brandRow, fold]),
-      lookField,
+      el("div", { className: "hs-head-text" }, [titleEl, lookField]),
+      fold,
     ])
-    const foot = el("div", { className: "hs-foot" }, [el("div", { className: "hs-foot-meta" }, [statusTag, stats]), actions])
+    const foot = el("div", { className: "hs-foot" }, [
+      el("div", { className: "hs-foot-row" }, [el("div", { className: "hs-foot-meta" }, [statusTag, stats]), actions]),
+      ...(options.brand ? [el("div", { className: "hs-brand" }, [options.brand])] : []),
+    ])
     panel.append(top, tabBar, body, foot, toast)
     document.body.append(panel)
     setFolded(options.folded ?? window.matchMedia("(max-width: 600px)").matches)
+    stopDragging = makeDraggable(top, () => setFolded(!panel.classList.contains("hs-folded")))
   }
   showTab(activeTab)
 
@@ -585,11 +640,9 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     options.onTheme?.(theme)
   }
 
-  function refresh(force = false) {
+  function refresh() {
     followPalette()
     refreshers.forEach((r) => r())
-    // Leave the JSON alone while someone is editing it.
-    if (force || document.activeElement !== json) json.value = JSON.stringify(scene(), null, 2)
   }
   const offSource = field.on("source", () => refresh())
   refresh()
@@ -610,6 +663,7 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       clearInterval(timer)
       offSource()
       window.removeEventListener("keydown", onKey)
+      stopDragging()
       panel.remove()
       top.remove()
       stats.remove()

@@ -1,4 +1,4 @@
-name: Deploy Harco Studio
+name: Deploy Particle Studio
 
 # Builds the studio, seals it behind the access key, and publishes the sealed
 # page to the harasyn-co/studio repo, whose GitHub Pages site serves

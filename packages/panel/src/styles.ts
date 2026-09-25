@@ -25,28 +25,22 @@ export const STUDIO_CSS = /* css */ `
   backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 30px 70px rgb(0 0 0 / 0.35);
 }
+.hs-studio.hs-left { right: auto; left: 20px; }
 .hs-studio.hs-docked { position: relative; top: auto; right: auto; width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; z-index: auto; }
 .hs-studio.hs-folded > :not(.hs-head) { display: none; }
 
-/* Head: the brand ("HARCO | STUDIO") and fold button, then the look's name. */
-.hs-head { display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 16px 22px; border-bottom: 1px solid var(--hs-line); }
+/* Head: a bold title with the look's name tucked just under it, and the
+   round fold button. */
+.hs-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 14px 22px; border-bottom: 1px solid var(--hs-line); }
 .hs-studio.hs-folded .hs-head { border-bottom: 0; }
-.hs-head-row { display: flex; align-items: center; gap: 12px; }
-.hs-brandrow { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-.hs-brand { display: flex; color: var(--hs-fg); }
-.hs-brand svg { display: block; width: 76px; height: auto; }
-.hs-brand-rule { width: 1px; height: 12px; background: var(--hs-line-strong); }
-/* "STUDIO": set to the wordmark's height and wide stance in the panel's
-   own sans, lighter and quieter so HARCO leads. */
-.hs-crumb-root {
-  font: 500 11.5px/1 var(--hs-sans) !important; letter-spacing: 0.32em !important; text-transform: uppercase;
-  color: var(--hs-dim); white-space: nowrap; transform: translateY(0.5px);
-}
+.hs-studio:not(.hs-docked) .hs-head { cursor: grab; touch-action: none; user-select: none; }
+.hs-studio.hs-dragging .hs-head { cursor: grabbing; }
+.hs-studio.hs-dragging { transition: none; box-shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 40px 90px rgb(0 0 0 / 0.5); }
+@media (max-width: 600px) { .hs-studio:not(.hs-docked) .hs-head { cursor: default; } }
+.hs-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hs-crumb-root { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; color: var(--hs-fg); cursor: pointer; user-select: none; white-space: nowrap; }
 .hs-look-field { position: relative; min-width: 0; }
-.hs-lookname { width: 100%; background: transparent; color: var(--hs-fg); border: 0; border-bottom: 1px dashed transparent; padding: 2px 0; font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
-.hs-lookname::placeholder { color: var(--hs-faint); }
-.hs-lookname:hover { border-bottom-color: var(--hs-line-strong); }
-.hs-lookname:focus { outline: none; border-bottom-color: var(--hs-accent-line); }
+.hs-lookname { display: block; color: var(--hs-dim); font-size: 12.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hs-dirty { display: none; }
 .hs-foot .hs-stats { font: 500 10.5px/1 var(--hs-mono) !important; letter-spacing: 0.12em !important; color: var(--hs-dim); text-transform: uppercase; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hs-studio button.hs-fold {
@@ -127,9 +121,8 @@ export const STUDIO_CSS = /* css */ `
 .hs-advanced summary:hover { color: var(--hs-dim); }
 
 /* Inputs. */
-.hs-studio input[type="text"]:not(.hs-lookname), .hs-studio input[type="password"] { background: var(--hs-sunken); color: var(--hs-fg); border: 1px solid transparent; border-radius: 10px; padding: 9px 11px; }
-.hs-studio input[type="text"]:not(.hs-lookname):focus, .hs-studio input[type="password"]:focus, .hs-json:focus { outline: none; border-color: var(--hs-accent-line); }
-.hs-json { width: 100%; resize: vertical; background: var(--hs-sunken); color: var(--hs-fg); border: 1px solid transparent; border-radius: 12px; padding: 12px; font: 11px/1.55 var(--hs-mono) !important; white-space: pre; }
+.hs-studio input[type="text"], .hs-studio input[type="password"] { background: var(--hs-sunken); color: var(--hs-fg); border: 1px solid transparent; border-radius: 10px; padding: 9px 11px; }
+.hs-studio input[type="text"]:focus, .hs-studio input[type="password"]:focus { outline: none; border-color: var(--hs-accent-line); }
 
 /* Looks. */
 .hs-looks { display: flex; flex-direction: column; gap: 6px; }
@@ -139,11 +132,16 @@ export const STUDIO_CSS = /* css */ `
 .hs-badge { font: 500 10.5px/1 var(--hs-mono) !important; letter-spacing: 0.08em !important; text-transform: uppercase; color: var(--hs-accent); background: var(--hs-accent-bg); padding: 6px 8px; border-radius: 7px; white-space: nowrap; }
 
 /* Foot: the look's state and its actions, on a darker band. */
-.hs-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 16px 14px 22px; background: var(--hs-foot); border-top: 1px solid var(--hs-line); }
+.hs-foot { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 12px 22px; background: var(--hs-foot); border-top: 1px solid var(--hs-line); }
+.hs-foot-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+/* The brand, small and centred at the very bottom. */
+.hs-brand { display: flex; justify-content: center; color: var(--hs-faint); padding-right: 6px; }
+.hs-brand svg { display: block; width: 52px; height: auto; }
 .hs-foot-meta { display: flex; flex-direction: column; gap: 5px; }
 .hs-foot .hs-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 .hs-tag { font: 500 10.5px/1 var(--hs-mono) !important; letter-spacing: 0.14em !important; text-transform: uppercase; color: var(--hs-accent); white-space: nowrap; }
 .hs-tag.hs-tag-quiet { color: var(--hs-faint); }
+.hs-tag:empty { display: none; }
 
 /* Messages. */
 .hs-problems { margin: 14px 22px 0; padding: 10px 12px; color: var(--hs-bad); background: rgb(240 122 110 / 0.1); border-radius: 10px; white-space: pre-wrap; font: 12px/1.45 var(--hs-mono) !important; }

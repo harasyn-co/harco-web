@@ -43,7 +43,7 @@ const gate = `<!doctype html>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Harco Studio</title>
+<title>Particle Studio</title>
 <style>
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; background: #0b0b0c; color: #d9d6ce; font: 13px/1.5 ui-monospace, "IBM Plex Mono", Menlo, monospace; }
@@ -60,7 +60,7 @@ const gate = `<!doctype html>
 <body>
 <main>
   <form id="gate" autocomplete="off">
-    <h1>Harco Studio</h1>
+    <h1>Particle Studio</h1>
     <input id="key" type="password" placeholder="Access key" aria-label="Access key" autofocus />
     <label><input id="remember" type="checkbox" checked /> Remember on this device</label>
     <button type="submit">Open</button>

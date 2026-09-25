@@ -4,7 +4,7 @@ Monorepo for harasyn.co and the particle engine behind it.
 
 ```
 apps/site/         harasyn.co (React + Vite). Deploys to GitHub Pages on push to main.
-apps/studio/       Harco Studio (studio.harasyn.co): the engine with every setting
+apps/studio/       Particle Studio (studio.harasyn.co): the engine with every setting
                    as a control, for exploring designs and saving looks to the site.
 packages/engine/   @harasyn/engine: particles that gather into shapes, harmonics,
                    math, images and UI. Framework-free, with a thin React wrapper.
@@ -32,7 +32,7 @@ SITE_VERSION=v0 npm run dev
 
 The live version is set in `apps/site/site.config.ts`.
 
-## Harco Studio
+## Particle Studio
 
 The studio is the engine with every setting as a control. Run it locally with
 `npm run dev -w @harasyn/studio`, or use the hosted copy at studio.harasyn.co.
