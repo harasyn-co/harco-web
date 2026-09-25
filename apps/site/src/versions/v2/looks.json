@@ -71,7 +71,7 @@
         "text": "in experimentation mode"
       },
       "style": {
-        "kind": "dots",
+        "kind": "ascii",
         "size": 1.5,
         "opacity": 1,
         "palette": {
@@ -88,11 +88,11 @@
           "length": 0.06
         },
         "ascii": {
-          "cell": 10,
-          "chars": " .:-=+*#%@",
+          "cell": 4,
+          "chars": " ░▒▓█",
           "grid": true,
           "color": "shade",
-          "contrast": 1,
+          "contrast": 0.2,
           "font": "\"IBM Plex Mono\", ui-monospace, Menlo, monospace"
         }
       },
@@ -108,7 +108,7 @@
         "count": "auto"
       },
       "reservoir": {
-        "mode": "band",
+        "mode": "field",
         "height": 0.12,
         "opacity": 0.55,
         "drift": 0.05
@@ -117,7 +117,7 @@
         "gather": 3,
         "scatter": 2.5,
         "reserve": 0.12,
-        "via": "direct",
+        "via": "reservoir",
         "autoplay": {
           "forms": [
             {
