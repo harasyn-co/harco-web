@@ -4,6 +4,7 @@ import { applyPatch, DEFAULT_SCENE, ISOMETRIC_PITCH, type Scene, type ScenePatch
 import { FORMS, type FormName } from "../sources/forms"
 import { compileSdf, type SdfProgram } from "../sources/sdf"
 import { compileCurve, CURVES, type CurveProgram } from "../sources/curve"
+import { compileText, type TextProgram } from "../sources/text"
 import { SHADING_UNIFORMS } from "../styles/shading"
 import { POINTS_FRAG, POINTS_VERT, SHAPE } from "../styles/points"
 import { STREAKS_FRAG, STREAKS_VERT } from "../styles/streaks"
@@ -101,7 +102,11 @@ function sideFor(count: Scene["particles"]["count"], sideScale: number) {
   return count === "auto" ? Math.round(autoSide() * sideScale) : clamp(Math.round(Math.sqrt(count)), 16, 1024)
 }
 
-function sdfBody(source: Exclude<SourceSpec, { type: "curve" }>) {
+type SourceProgram = SdfProgram | CurveProgram | TextProgram
+
+const TEXT_FONT = '"IBM Plex Mono", ui-monospace, Menlo, monospace'
+
+function sdfBody(source: Extract<SourceSpec, { type: "shape" | "sdf" }>) {
   if (source.type === "shape") {
     const form = FORMS[source.form]
     if (!form) throw new Error(`Unknown form "${source.form}". Forms: ${Object.keys(FORMS).join(", ")}`)
@@ -156,7 +161,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   // ASCII: a character atlas, and a low-resolution grid to gather into.
   let atlas: { tex: WebGLTexture; key: string; count: number } | null = null
   let grid: { tex: WebGLTexture; fb: WebGLFramebuffer; w: number; h: number } | null = null
-  const programs = new Map<string, SdfProgram | CurveProgram>()
+  const programs = new Map<string, SourceProgram>()
   let side = 0
   let particles: PingPong | null = null
   let anchors: PingPong | null = null
@@ -224,7 +229,22 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   allocate()
 
   // Compiled source programs, by kind and code.
-  function programFor(source: SourceSpec): SdfProgram | CurveProgram {
+  function programFor(source: SourceSpec): SourceProgram {
+    if (source.type === "text") {
+      const key = `text:${JSON.stringify({ ...source, seed: undefined })}`
+      let p = programs.get(key)
+      if (!p) {
+        p = compileText(gl!, {
+          text: source.text,
+          font: source.font ?? TEXT_FONT,
+          width: source.width ?? 1.9,
+          speed: source.speed ?? 9,
+          cursor: source.cursor ?? true,
+        })
+        programs.set(key, p)
+      }
+      return p
+    }
     if (source.type === "curve") {
       const { glsl, length, duration } = curveParts(source)
       const key = `curve:${length}:${duration}:${glsl}`
@@ -250,11 +270,11 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   let presenceRate = 1
   let dir = 1
   let reseedUntil = -1
-  let pending: { source: SourceSpec; program: SdfProgram | CurveProgram; seed: Vec4; resumeAt: number } | null = null
+  let pending: { source: SourceSpec; program: SourceProgram; seed: Vec4; resumeAt: number } | null = null
   let nextAuto = Infinity
   let started = false
 
-  function activate(source: SourceSpec, program: SdfProgram | CurveProgram, seed: Vec4) {
+  function activate(source: SourceSpec, program: SourceProgram, seed: Vec4) {
     current = { program, seed, since: t }
     scene = { ...scene, source: structuredClone(source) }
     reseedUntil = t + RESEED_CHANGE_TIME
@@ -477,8 +497,10 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     // Autoplay picks another form once the current one has held long enough.
     const auto = reduced ? null : scene.motion.autoplay
     if (auto && t >= nextAuto && !pending) {
-      const options = auto.forms.filter((f) => !(scene.source.type === "shape" && scene.source.form === f))
-      if (options.length) morph({ type: "shape", form: options[Math.floor(Math.random() * options.length)] })
+      const sources = auto.forms.map((f): SourceSpec => (typeof f === "string" ? { type: "shape", form: f } : f))
+      const current = JSON.stringify({ ...scene.source, seed: undefined })
+      const options = sources.filter((s) => JSON.stringify({ ...s, seed: undefined }) !== current)
+      if (options.length) morph(options[Math.floor(Math.random() * options.length)])
       else nextAuto = Infinity
     }
 
@@ -509,6 +531,18 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     gl!.uniform1f(sp.u.uReseed, t < reseedUntil ? RESEED_CHANGE : RESEED_REST)
     gl!.uniform1f(sp.u.uReset, resetAnchors ? 1 : 0)
     if ("range" in sp) gl!.uniform2f(sp.uRange, sp.range[0], sp.range[1])
+    if ("text" in sp) {
+      const x = sp.text
+      bindTextures(gl!, 1, [[sp.extra.uPoints, x.points]])
+      gl!.uniformMatrix3fv(sp.extra.uModel, false, model)
+      gl!.uniform1f(sp.extra.uPointCount, x.count)
+      gl!.uniform1i(sp.extra.uPointsSide, x.side)
+      gl!.uniform1f(sp.extra.uCharCount, x.charCount)
+      gl!.uniform1f(sp.extra.uCharTime, x.charTime)
+      gl!.uniform1f(sp.extra.uDelay, x.delay)
+      gl!.uniform1fv(sp.extra.uCharX, x.charX)
+      gl!.uniform4fv(sp.extra.uCursor, x.cursor)
+    }
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     anchors.swap()
     resetAnchors = false
@@ -531,7 +565,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     gl!.uniform2f(uu.uView, viewVec[0], viewVec[1])
     const r = scene.reservoir
     gl!.uniform4f(uu.uReservoir, RESERVOIR_MODES[r.mode] ?? 1, clamp(r.height, 0, 1), clamp(r.opacity, 0, 1), r.drift)
-    gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : 0.02)
+    gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : "text" in sp ? 0.05 : 0.02)
     gl!.uniform1f(uu.uSnap, snap ? 1 : 0)
     gl!.uniform1f(uu.uReset, resetParticles ? 1 : 0)
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
@@ -675,7 +709,10 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       canvas.removeEventListener("pointercancel", onUp)
       particles?.dispose()
       anchors?.dispose()
-      for (const p of programs.values()) gl!.deleteProgram(p.program)
+      for (const p of programs.values()) {
+        gl!.deleteProgram(p.program)
+        if ("dispose" in p) p.dispose()
+      }
       gl!.deleteProgram(update)
       for (const p of [points, streaks, ascii]) gl!.deleteProgram(p)
       if (atlas) gl!.deleteTexture(atlas.tex)

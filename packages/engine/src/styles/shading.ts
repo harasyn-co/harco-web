@@ -75,7 +75,7 @@ vec4 shade(Particle p) {
   vec3 loose = mix(uLoose, uAccent * 2.2 + 0.1, 0.18);
   float looseAlpha = 0.6 * p.vis;
 
-  float alpha = mix(looseAlpha, formAlpha, p.attach) * uOpacity;
+  float alpha = mix(looseAlpha, formAlpha * p.vis, p.attach) * uOpacity;
   return vec4(mix(loose, col, p.attach) * alpha, alpha);
 }
 

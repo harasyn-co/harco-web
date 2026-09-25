@@ -21,6 +21,7 @@ type Schema = {
   maximum?: number
   exclusiveMinimum?: number
   minLength?: number
+  maxLength?: number
   pattern?: string
   description?: string
 }
@@ -93,6 +94,7 @@ function check(schema: Schema, value: unknown, path: string, errors: string[]) {
   if (t === "string") {
     const s = value as string
     if (schema.minLength !== undefined && s.length < schema.minLength) errors.push(`${at}: must be at least ${schema.minLength} characters`)
+    if (schema.maxLength !== undefined && s.length > schema.maxLength) errors.push(`${at}: must be at most ${schema.maxLength} characters (got ${s.length})`)
     if (schema.pattern && !new RegExp(schema.pattern).test(s)) errors.push(`${at}: must be ${schema.description ?? `like ${schema.pattern}`} (got ${show(s)})`)
   }
   if (t === "array") {
@@ -119,7 +121,7 @@ function check(schema: Schema, value: unknown, path: string, errors: string[]) {
 }
 
 function phrase(type?: string) {
-  return type === "integer" ? "a whole number" : type === "object" ? "an object" : type ? `a ${type}` : "something else"
+  return type === "integer" ? "a whole number" : type === "object" || !type ? "an object" : `a ${type}`
 }
 
 function resolve(s: Schema): Schema {

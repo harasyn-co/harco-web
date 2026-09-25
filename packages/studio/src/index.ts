@@ -118,6 +118,7 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   }
 
   const scene = () => field.getScene()
+  let lastAutoplay: NonNullable<Scene["motion"]["autoplay"]> = field.getScene().motion.autoplay ?? { forms: FORM_NAMES, hold: 12 }
   const set = (patch: ScenePatch) => field.set(patch)
   const currentForm = () => { const s = scene().source; return s.type === "shape" ? s.form : ("" as FormName) }
   const currentCurve = () => { const s = scene().source; return s.type === "curve" && s.curve ? s.curve : ("" as CurveName) }
@@ -239,8 +240,12 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     ),
     section("Motion",
       segmented(["direct", "reservoir"] as const, (v) => (v === "direct" ? "Slide" : "Via reservoir"), () => scene().motion.via, (via) => set({ motion: { via } })),
-      segmented(["on", "off"] as const, (v) => (v === "on" ? "Autoplay" : "Hold"), () => (scene().motion.autoplay ? "on" : "off"),
-        (v) => set({ motion: { autoplay: v === "on" ? { forms: FORM_NAMES, hold: 12 } : null } })),
+      segmented(["on", "off"] as const, (v) => (v === "on" ? "Autoplay" : "Hold"), () => (scene().motion.autoplay ? "on" : "off"), (v) => {
+        // Turning autoplay back on restores the rotation it had, e.g. with text in it.
+        const current = scene().motion.autoplay
+        if (current) lastAutoplay = current
+        set({ motion: { autoplay: v === "on" ? lastAutoplay : null } })
+      }),
       slider("Gather s", 0.5, 10, 0.1, () => scene().motion.gather, (gather) => set({ motion: { gather } })),
       slider("Scatter s", 0.5, 10, 0.1, () => scene().motion.scatter, (scatter) => set({ motion: { scatter } })),
     ),

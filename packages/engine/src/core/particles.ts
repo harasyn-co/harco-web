@@ -179,6 +179,8 @@ void main() {
   float vis = uReservoir.x < 0.5
     ? max(attach, smoothstep(0.6, 0.08, length(target - pos)))
     : max(mix(1.0, h.vis, atHome), attach);
+  // Anchors marked 2 are held but hidden (a blinking cursor): stay, unseen.
+  if (A.w > 1.5 && attach > 0.5) vis = 0.0;
 
   outPos = vec4(pos, attach);
   outVel = vec4(vel, 1.0 + clamp(vis, 0.0, 1.0));

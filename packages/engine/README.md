@@ -20,7 +20,7 @@ scenes. The parts:
 
 | Part        | What it controls                                                     |
 | ----------- | -------------------------------------------------------------------- |
-| `source`    | What the particles gather into: a built-in `shape`, a custom `sdf`, or a self-drawing `curve` |
+| `source`    | What the particles gather into: a built-in `shape`, a custom `sdf`, a self-drawing `curve`, or typed `text` |
 | `style`     | How particles are drawn (`dots`, `squares`, `streaks`, `ascii`), size, opacity, `palette` |
 | `camera`    | `perspective` or `isometric`, yaw, pitch, spin, zoom, drag to rotate |
 | `particles` | Particle `count`, or `"auto"` to pick by device and adapt to frame rate |
@@ -56,11 +56,20 @@ style.palette.rim: must be a hex colour, like #d9d6ce (got "teal")
 without WebGL2 and float render targets; check `isSupported()` first to show a
 fallback. Reduced motion follows the system setting unless given.
 
-## Custom shapes and curves
+## Custom shapes, curves and text
 
 ```json
 { "type": "sdf", "glsl": "return length(p) - 0.8 + 0.1 * sin(8.0 * p.x + uTime);" }
 { "type": "curve", "glsl": "return vec3(sin(3.0 * t), sin(2.0 * t), 0.0) * 0.8;", "length": 6.2832, "duration": 8 }
+{ "type": "text", "text": "in experimentation mode", "speed": 9, "cursor": true }
+```
+
+Text types itself out, always facing the viewer, with a block cursor that
+blinks once it's done. `motion.autoplay.forms` takes form names or whole
+sources, so text can sit in the rotation:
+
+```json
+"autoplay": { "forms": [{ "type": "text", "text": "hello" }, "cells", "knot"], "hold": 12 }
 ```
 
 GLSL that fails to compile throws from `morph`/`set` and leaves the current

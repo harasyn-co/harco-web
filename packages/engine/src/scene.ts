@@ -24,6 +24,11 @@ export type SourceSpec =
    * returning a point inside radius ~1 (it can use PI).
    */
   | { type: "curve"; curve?: CurveName; glsl?: string; length?: number; duration?: number; seed?: Vec4 }
+  /**
+   * Text typed out in particles, always facing the viewer, with an optional
+   * block cursor that blinks once typing is done.
+   */
+  | { type: "text"; text: string; font?: string; width?: number; speed?: number; cursor?: boolean; seed?: Vec4 }
 
 export interface Palette {
   /** Page background. */
@@ -120,8 +125,8 @@ export interface MotionSpec {
   reserve: number
   /** How a change of source travels: sliding over, or via the reservoir. */
   via: Via
-  /** Cycle through forms on its own. Null to stay put. */
-  autoplay: null | { forms: FormName[]; hold: number }
+  /** Cycle through forms (or any sources) on its own. Null to stay put. */
+  autoplay: null | { forms: (FormName | SourceSpec)[]; hold: number }
 }
 
 export interface Scene {
