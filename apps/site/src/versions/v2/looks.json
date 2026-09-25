@@ -94,6 +94,13 @@
           "color": "shade",
           "contrast": 0.2,
           "font": "\"IBM Plex Mono\", ui-monospace, Menlo, monospace"
+        },
+        "type": {
+          "glyphs": "strokes",
+          "weight": 0.08,
+          "density": 0.195,
+          "speed": 9,
+          "width": 2.4
         }
       },
       "camera": {

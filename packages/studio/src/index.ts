@@ -166,8 +166,11 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     const current = await store.load()
     const name = current.active
     if (!name || !current.looks[name]) throw new Error("There's no site default look to save into yet")
+    const type = scene().style.type
+    // A page running older engine code has no type settings; never save that.
+    if (!type) throw new Error("This page is running older engine code with no type settings. Reload it and try again.")
     const look = structuredClone(current.looks[name]) as ScenePatch
-    look.style = { ...look.style, type: scene().style.type }
+    look.style = { ...look.style, type }
     looks = await store.save(name, look as Scene, true)
     renderLooks()
     flash(`type saved to ${name}, the site's default`)

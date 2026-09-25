@@ -1,9 +1,15 @@
+/// <reference types="vite/client" />
 // React wrapper: <Field> owns a canvas and an engine field. The field is
 // created once; later changes to `scene` are applied with field.set(), and a
 // changed source morphs to it.
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { createField, isSupported, type Field as EngineField, type FieldOptions } from "./core/field"
 import type { ScenePatch, SourceSpec } from "./scene"
+
+// In development, a hot update would swap this component in place and could
+// keep a field running the engine code it started with. Any change to the
+// engine therefore reloads the page instead.
+if (import.meta.hot) import.meta.hot.accept(() => location.reload())
 
 export interface FieldProps {
   scene: ScenePatch
@@ -53,7 +59,13 @@ export function Field({ scene, className, options, onField, onSource, fallback }
     applied.current = next
     const patch = { ...scene }
     if (patch.source && JSON.stringify(patch.source) === JSON.stringify(f.getScene().source)) delete patch.source
-    f.set(patch)
+    try {
+      f.set(patch)
+    } catch (err) {
+      // A look that doesn't validate keeps the current scene rather than
+      // breaking the page; the error names what's wrong.
+      console.error(err)
+    }
   }, [scene])
 
   if (!supported) return <>{fallback ?? null}</>
