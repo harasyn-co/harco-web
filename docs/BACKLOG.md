@@ -1,7 +1,7 @@
 # Backlog
 
-Ideas we've agreed on and parked, roughly in order. Newest decisions first
-within each item.
+Ideas we've agreed on and parked. The active plan is in
+[ROADMAP.md](ROADMAP.md); items there are no longer tracked here.
 
 ## Engine: text and UI from particles
 
