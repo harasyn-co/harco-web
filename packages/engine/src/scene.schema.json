@@ -439,10 +439,24 @@
               "maxLength": 80,
               "description": "Up to 80 characters, typed one at a time."
             },
+            "glyphs": {
+              "enum": [
+                "strokes",
+                "matrix",
+                "font"
+              ],
+              "description": "How letters are made. strokes: single-stroke Hershey letters, written stroke by stroke with particles along each stroke (default). matrix: dot-matrix letters, each dot a cluster. font: a web font's filled letters, sampled."
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.5,
+              "description": "Stroke width (strokes) or dot size (matrix), as a share of the capital height. Default 0.08."
+            },
             "font": {
               "type": "string",
               "minLength": 1,
-              "description": "CSS font family. Defaults to IBM Plex Mono."
+              "description": "CSS font family, for matrix and font glyphs. Defaults to IBM Plex Mono."
             },
             "width": {
               "type": "number",

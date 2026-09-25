@@ -241,6 +241,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
           speed: source.speed ?? 9,
           cursor: source.cursor ?? true,
           density: source.density ?? 0.05,
+          glyphs: source.glyphs ?? "strokes",
+          weight: source.weight ?? 0.08,
         })
         programs.set(key, p)
       }
@@ -545,6 +547,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.uniform1fv(sp.extra.uCharX, x.charX)
       gl!.uniform4fv(sp.extra.uCursor, x.cursor)
       gl!.uniform1f(sp.extra.uDensity, x.density)
+      gl!.uniform1i(sp.extra.uGlyphMode, x.mode)
+      gl!.uniform1f(sp.extra.uWeight, x.weight)
     }
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     anchors.swap()

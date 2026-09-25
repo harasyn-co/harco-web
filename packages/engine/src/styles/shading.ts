@@ -71,6 +71,12 @@ vec4 shade(Particle p) {
   float formAlpha = mix(0.1, 0.95, front) * mix(0.55, 1.0, ao);
   if (persp) formAlpha *= mix(0.55, 1.0, smoothstep(-1.2, 0.6, p.world.z));
 
+  // Type (normal w 2) is flat and bright, not lit like a solid.
+  if (p.normal.w > 1.5) {
+    col = 1.0 - exp(-uLight * 2.4);
+    formAlpha = 0.95;
+  }
+
   // Loose grain: the loose colour with a trace of the accent.
   vec3 loose = mix(uLoose, uAccent * 2.2 + 0.1, 0.18);
   float looseAlpha = 0.6 * p.vis;

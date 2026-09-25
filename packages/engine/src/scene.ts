@@ -28,7 +28,10 @@ export type SourceSpec =
    * Text typed out in particles, always facing the viewer, with an optional
    * block cursor that blinks once typing is done.
    */
-  | { type: "text"; text: string; font?: string; width?: number; speed?: number; cursor?: boolean; density?: number; seed?: Vec4 }
+  | {
+      type: "text"; text: string; glyphs?: "strokes" | "matrix" | "font"; weight?: number
+      font?: string; width?: number; speed?: number; cursor?: boolean; density?: number; seed?: Vec4
+    }
 
 export interface Palette {
   /** Page background. */

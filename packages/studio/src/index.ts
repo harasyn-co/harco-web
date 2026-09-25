@@ -147,6 +147,18 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     field.set(patch)
   }
 
+  // Text: type a line in particles, and try its glyphs and settings. Each
+  // change types the line again. Starts from the text on screen, if any.
+  type TextSource = Extract<ScenePatch["source"], { type: "text" }>
+  const onScreen = scene().source
+  let textSpec: TextSource = onScreen.type === "text" ? onScreen : { type: "text", text: "in experimentation mode" }
+  const textInput = el("input", { type: "text", value: textSpec.text, spellcheck: false, placeholder: "text to type" })
+  textInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void attempt(() => typeText({})); refresh() } })
+  function typeText(change: Partial<TextSource>) {
+    textSpec = { ...textSpec, ...change, text: textInput.value || textSpec.text }
+    field.morph(textSpec)
+  }
+
   // Scene JSON.
   const json = el("textarea", { spellcheck: false, rows: 14 })
   function applyJson() {
@@ -283,6 +295,16 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       }),
       slider("Gather s", 0.5, 10, 0.1, () => scene().motion.gather, (gather) => set({ motion: { gather } })),
       slider("Scatter s", 0.5, 10, 0.1, () => scene().motion.scatter, (scatter) => set({ motion: { scatter } })),
+    ),
+    section("Text",
+      row(textInput),
+      segmented(["strokes", "matrix", "font"] as const, (v) => ({ strokes: "Strokes", matrix: "Dot matrix", font: "Font" })[v],
+        () => textSpec.glyphs ?? "strokes", (glyphs) => typeText({ glyphs })),
+      slider("Density", 0.005, 0.3, 0.005, () => textSpec.density ?? 0.05, (density) => typeText({ density })),
+      slider("Weight", 0, 0.3, 0.01, () => textSpec.weight ?? 0.08, (weight) => typeText({ weight })),
+      slider("Speed", 2, 40, 1, () => textSpec.speed ?? 9, (speed) => typeText({ speed })),
+      slider("Width", 0.6, 4, 0.1, () => textSpec.width ?? 2.4, (width) => typeText({ width })),
+      row(button("Type it", () => typeText({}))),
     ),
     section("Form",
       segmented(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),
