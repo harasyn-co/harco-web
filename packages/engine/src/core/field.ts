@@ -19,6 +19,11 @@ import { SceneError, validateScene } from "../validate"
 const MIN_SIZE = 320
 const MAX_SIZE = 960
 const SQUARE_UNITS = 2.6
+// Scale of a typical desktop view (1440x900 CSS px) and its particle count.
+// Detail that is set in CSS px (ASCII cells) or as a share of particles
+// (text density) is scaled against these, so it reads the same on a phone.
+const REFERENCE_PPU = 828 / SQUARE_UNITS
+const REFERENCE_PARTICLES = 384 * 384
 const CAMERA_DISTANCE = 3
 const PERSPECTIVE_PITCH = 15
 // Share of anchors re-seeded per second: at rest, and just after a change.
@@ -57,6 +62,8 @@ export interface FieldStats {
   /** 0 is full quality; each step down lowers resolution or particle count. */
   quality: number
   reducedMotion: boolean
+  /** How large the scene is drawn relative to a typical desktop view. */
+  viewScale: number
 }
 
 export interface FieldOptions {
@@ -352,6 +359,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
 
   // Layout, recomputed on resize and zoom.
   let width = 0, height = 0, dpr = 1
+  // How large the scene is drawn, relative to a typical desktop view.
+  let viewScale = 1
   const viewVec = new Float32Array(2)
   const proj = new Float32Array(4)
   function resize() {
@@ -365,6 +374,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     canvas.height = height
     const square = clamp(Math.min(cssW * 0.62, cssH * 0.92), MIN_SIZE, MAX_SIZE)
     const ppu = (square / SQUARE_UNITS) * scene.camera.zoom
+    viewScale = ppu / REFERENCE_PPU
     const halfW = cssW / 2 / ppu
     const halfH = cssH / 2 / ppu
     viewVec.set([halfW, halfH])
@@ -547,8 +557,12 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.uniform1f(sp.extra.uCharTime, x.charTime)
       gl!.uniform1f(sp.extra.uDelay, x.delay)
       gl!.uniform1fv(sp.extra.uCharX, x.charX)
-      gl!.uniform4fv(sp.extra.uCursor, x.cursor)
-      gl!.uniform1f(sp.extra.uDensity, x.density)
+      // Keep letters' particles per CSS px of stroke the same on any screen:
+      // fewer when the text is drawn smaller, more when there are fewer
+      // particles overall.
+      const densityScale = clamp(viewScale * (REFERENCE_PARTICLES / (side * side)), 0.2, 1)
+      gl!.uniform4f(sp.extra.uCursor, x.cursor[0], x.cursor[1], x.cursor[2], x.cursor[3] * densityScale)
+      gl!.uniform1f(sp.extra.uDensity, x.density * densityScale)
       gl!.uniform1i(sp.extra.uGlyphMode, x.mode)
       gl!.uniform1f(sp.extra.uWeight, x.weight)
     }
@@ -586,6 +600,10 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     particles.swap()
     resetParticles = false
 
+    // ASCII cells shrink with the view (to half size at most), so letters
+    // and forms keep about as many characters across on a phone.
+    const asciiCell = () => Math.max(2, st.ascii.cell * clamp(viewScale, 0.5, 1)) * dpr
+
     // 3. Draw, in the scene's style.
     const st = scene.style
     type ShadingU = Record<(typeof SHADING_UNIFORMS)[number], WebGLUniformLocation | null>
@@ -622,7 +640,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
 
     if (st.kind === "ascii" && st.ascii.grid) {
       // Gather particles into the character grid, then print it.
-      const cell = Math.max(2, st.ascii.cell) * dpr
+      const cell = asciiCell()
       const g = ensureGrid(Math.ceil(width / (cell * CELL_ASPECT)), Math.ceil(height / cell))
       gl!.bindFramebuffer(gl!.FRAMEBUFFER, g.fb)
       gl!.viewport(0, 0, g.w, g.h)
@@ -660,7 +678,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     if (st.kind === "ascii") {
       // One character per particle: draw only about as many as fit on the
       // form (roughly an eighth of the screen's cells), or they pile into mush.
-      const cell = Math.max(2, st.ascii.cell) * dpr
+      const cell = asciiCell()
       const cells = (width * height) / (cell * cell * CELL_ASPECT)
       const stride = Math.max(1, Math.round((side * side) / (cells * 0.12)))
       drawPoints(SHAPE.glyph, cell, 1.6 * st.ascii.contrast, stride)
@@ -684,7 +702,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     scatter,
     gather,
     getView: () => ({ yaw: ((view.yaw % 360) + 360) % 360, pitch: view.pitch }),
-    stats: () => ({ fps: Math.round(fps), particles: side * side, quality, reducedMotion: reduced }),
+    stats: () => ({ fps: Math.round(fps), particles: side * side, quality, reducedMotion: reduced, viewScale: Math.round(viewScale * 100) / 100 }),
     debug() {
       const read = (target: { fb: WebGLFramebuffer }, attachment: number) => {
         const out = new Float32Array(side * side * 4)
