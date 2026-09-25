@@ -1,0 +1,17 @@
+{
+  "name": "@harasyn/playground",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@harasyn/engine": "*"
+  },
+  "devDependencies": {
+    "vite": "^8.0.4"
+  }
+}
