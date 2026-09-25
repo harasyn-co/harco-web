@@ -1,0 +1,59 @@
+name: Deploy Harco Studio
+
+# Builds the studio, seals it behind the access key, and publishes the sealed
+# page to the harasyn-co/studio repo, whose GitHub Pages site serves
+# studio.harasyn.co. Needs two secrets on this repo:
+#   STUDIO_ACCESS_KEY  the key visitors enter to open the studio
+#   STUDIO_DEPLOY_KEY  an SSH deploy key with write access to harasyn-co/studio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/studio/**"
+      - "packages/**"
+      - "apps/site/site.config.ts"
+      - "package-lock.json"
+      - ".github/workflows/studio.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: studio
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm install
+
+      # The gate refuses to run without the access key, so the studio is
+      # never published unprotected.
+      - run: npm run build:gated -w @harasyn/studio
+        env:
+          STUDIO_ACCESS_KEY: ${{ secrets.STUDIO_ACCESS_KEY }}
+
+      - name: Publish to harasyn-co/studio
+        env:
+          DEPLOY_KEY: ${{ secrets.STUDIO_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/studio_deploy
+          chmod 600 ~/.ssh/studio_deploy
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/studio_deploy -o StrictHostKeyChecking=accept-new"
+          git clone --depth 1 git@github.com:harasyn-co/studio.git site
+          cd site
+          git rm -rq --ignore-unmatch .
+          cp ../apps/studio/dist/index.html index.html
+          echo "studio.harasyn.co" > CNAME
+          touch .nojekyll
+          git add -A
+          git -c user.name="harco-web deploy" -c user.email="deploy@harasyn.co" commit -qm "Studio from harco-web ${GITHUB_SHA::7}" || echo "Nothing changed"
+          git push origin HEAD

@@ -4,7 +4,7 @@ import { defineConfig, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import { liveVersion } from "./site.config"
-import { studioLooks } from "../../packages/studio/vite"
+import { studioLooks } from "../../packages/panel/vite"
 
 const VIRTUAL_ID = "virtual:site-version"
 const RESOLVED_ID = "\0" + VIRTUAL_ID
