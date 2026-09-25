@@ -18,6 +18,11 @@ Guiding decisions:
 
 ## Phase 1: Foundation, layers and particle models
 
+**Done.** Layers and models are in the engine (`scene.layers`,
+`particles.model`) and the studio (Scene tab: Model, Layers). Still to tune:
+Relief and Wave are first guesses until Phases 3 and 4 give them real work,
+and Lite's budget waits on the panel's hardware.
+
 Everything later needs these.
 
 - **Layers.** A scene holds several sources at once, each with a share of the

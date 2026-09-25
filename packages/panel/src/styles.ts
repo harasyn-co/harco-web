@@ -80,6 +80,11 @@ export const STUDIO_CSS = /* css */ `
 .hs-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; align-items: center; }
 .hs-row > input[type="text"] { flex: 1; min-width: 0; }
 .hs-hint { margin: 8px 0 0; color: var(--hs-dim); font-size: 12.5px; }
+.hs-layers { display: grid; gap: 10px; }
+.hs-layers:empty { display: none; }
+.hs-layer { padding: 12px; border-radius: 14px; background: rgb(255 255 255 / 0.04); border: 1px solid rgb(255 255 255 / 0.06); }
+.hs-layer h4 { margin: 0 0 4px; font: 500 11px/1.2 var(--hs-mono); color: var(--hs-fg); letter-spacing: 0.04em; }
+.hs-layer input[type="text"] { width: 100%; margin-top: 6px; }
 
 /* Tiles: rounded choices; the chosen one in the accent. */
 .hs-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin: 8px 0 0; }

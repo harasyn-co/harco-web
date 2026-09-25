@@ -3,6 +3,7 @@
 // (or any part of it) to field.set().
 import type { FormName } from "./sources/forms"
 import type { CurveName } from "./sources/curve"
+import type { ModelName } from "./core/models"
 
 export type Vec4 = [number, number, number, number]
 
@@ -115,6 +116,31 @@ export interface CameraSpec {
 export interface ParticleSpec {
   /** Particle count, rounded to a square. "auto" picks by device. */
   count: "auto" | number
+  /** How the base layer's particles move and draw (see MODELS). */
+  model: ModelName
+}
+
+/**
+ * A layer on top of the base: another source drawn at the same time, with
+ * its own share of the particles and its own particle model.
+ */
+export interface LayerSpec {
+  /** Names the layer, so changing it later keeps its particles in place. */
+  id: string
+  source: SourceSpec
+  /** Share of all particles this layer uses, 0..0.9. */
+  share: number
+  /** Defaults to "type" for text, "sculpt" for everything else. */
+  model?: ModelName
+  /** "world" turns with the camera; "screen" stays flat and fixed, for UI. */
+  space?: "world" | "screen"
+  /**
+   * Where the layer's centre sits. World: [x, y, z] in world units (the
+   * forms are ~2 across). Screen: [x, y] from -1 to 1 across the view.
+   */
+  at?: [number, number] | [number, number, number]
+  /** Size multiplier. */
+  scale?: number
 }
 
 export type Via = "direct" | "reservoir"
@@ -154,6 +180,8 @@ export interface Scene {
   particles: ParticleSpec
   reservoir: ReservoirSpec
   motion: MotionSpec
+  /** Extra layers over the base source, drawn in order. */
+  layers: LayerSpec[]
 }
 
 export type ScenePatch = {
@@ -217,9 +245,10 @@ export const DEFAULT_SCENE: Scene = {
     },
   },
   camera: { projection: "perspective", yaw: 0, pitch: 15, spin: 4.5, zoom: 1, drag: true },
-  particles: { count: "auto" },
+  particles: { count: "auto", model: "sculpt" },
   reservoir: { mode: "band", height: 0.12, opacity: 0.55, drift: 0.05 },
   motion: { gather: 3, scatter: 2.5, reserve: 0.12, via: "direct", autoplay: null },
+  layers: [],
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> =>

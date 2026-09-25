@@ -1,6 +1,8 @@
 // The field: owns the canvas, the particles and the render loop, and exposes
 // the commands apps and agents use to drive it.
-import { applyPatch, DEFAULT_SCENE, ISOMETRIC_PITCH, type Scene, type ScenePatch, type SourceSpec, type Vec4, type Via } from "../scene"
+import { applyPatch, DEFAULT_SCENE, ISOMETRIC_PITCH, type LayerSpec, type Scene, type ScenePatch, type SourceSpec, type Vec4, type Via } from "../scene"
+import { MODELS, type ModelName } from "./models"
+import { allocateRows } from "./layers"
 import { FORMS, type FormName } from "../sources/forms"
 import { compileSdf, type SdfProgram } from "../sources/sdf"
 import { compileCurve, CURVES, type CurveProgram } from "../sources/curve"
@@ -115,8 +117,28 @@ function autoSide() {
   return small || coarse ? 256 : 384
 }
 
-function sideFor(count: Scene["particles"]["count"], sideScale: number) {
-  return count === "auto" ? Math.round(autoSide() * sideScale) : clamp(Math.round(Math.sqrt(count)), 16, 1024)
+function sideFor(count: Scene["particles"]["count"], sideScale: number, budget: number) {
+  return count === "auto" ? Math.round(autoSide() * sideScale * Math.sqrt(budget)) : clamp(Math.round(Math.sqrt(count)), 16, 1024)
+}
+
+// Particles in flight latch on this close at least, whatever the model:
+// curves draw themselves fast, so they need a wide reach.
+const MIN_CAPTURE: Record<SourceSpec["type"], number> = { shape: 0, sdf: 0, curve: 0.3, text: 0.1 }
+
+/** A source being drawn, with its own rows of particles and its own model. */
+interface Layer {
+  id: string
+  spec: SourceSpec
+  program: SourceProgram
+  seed: Vec4
+  since: number
+  model: ModelName
+  space: "world" | "screen"
+  at: number[]
+  scale: number
+  rows: [number, number]
+  reset: boolean
+  reseedUntil: number
 }
 
 type SourceProgram = SdfProgram | CurveProgram | TextProgram
@@ -142,9 +164,9 @@ function curveParts(source: Extract<SourceSpec, { type: "curve" }>) {
 
 const UPDATE_UNIFORMS = [
   "uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir",
-  "uView", "uCamera", "uReservoir", "uCapture", "uRestDim", "uSnap", "uReset",
+  "uView", "uCamera", "uReservoir", "uCapture", "uFlight", "uLayer", "uRestDim", "uSnap", "uReset",
 ] as const
-const POINTS_UNIFORMS = [...SHADING_UNIFORMS, "uPointSize", "uGlyphCount", "uGain", "uShape", "uAtlas", "uStride"] as const
+const POINTS_UNIFORMS = [...SHADING_UNIFORMS, "uPointSize", "uGlyphCount", "uGain", "uShape", "uAtlas", "uStride", "uFirst", "uResolution", "uPixelSnap"] as const
 const STREAKS_UNIFORMS = [...SHADING_UNIFORMS, "uTrail"] as const
 const ASCII_UNIFORMS = ["uGrid", "uAtlas", "uGlyphCount", "uCell", "uGain", "uBackground", "uInk"] as const
 
@@ -184,7 +206,6 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   let particles: PingPong | null = null
   let anchors: PingPong | null = null
   let resetParticles = true
-  let resetAnchors = true
   let quality = 0
   let snapUntil = -1
 
@@ -233,18 +254,20 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     return grid
   }
 
+  // The base model's limits (Lite halves the particles and caps the pixel ratio).
+  const baseModel = () => MODELS[scene.particles.model] ?? MODELS.sculpt
+
   // Particle and anchor state, sized together.
   function allocate() {
     particles?.dispose()
     anchors?.dispose()
-    side = sideFor(scene.particles.count, QUALITY[quality].sideScale)
+    side = sideFor(scene.particles.count, QUALITY[quality].sideScale, baseModel().budget ?? 1)
     particles = new PingPong(gl!, side, 2)
     anchors = new PingPong(gl!, side, 2)
     resetParticles = true
-    resetAnchors = true
+    assignRows()
   }
   buildPrograms()
-  allocate()
 
   // Compiled source programs, by kind and code.
   function programFor(source: SourceSpec): SourceProgram {
@@ -281,7 +304,49 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   }
 
   const randomSeed = (): Vec4 => [Math.random(), Math.random(), Math.random(), Math.random()]
-  let current = { program: programFor(scene.source), seed: scene.source.seed ?? randomSeed(), since: 0 }
+  const defaultModel = (source: SourceSpec): ModelName => (source.type === "text" ? "type" : "sculpt")
+
+  // The base layer is the scene's source; extra layers come from scene.layers.
+  const base: Layer = {
+    id: "base", spec: scene.source, program: programFor(scene.source), seed: scene.source.seed ?? randomSeed(), since: 0,
+    model: scene.particles.model, space: "world", at: [0, 0, 0], scale: 1, rows: [0, 0], reset: true, reseedUntil: -1,
+  }
+  let extra: Layer[] = []
+  const allLayers = () => [base, ...extra]
+
+  // Rows follow the shares; a layer whose rows moved starts its points afresh.
+  function assignRows() {
+    const ranges = allocateRows(side, extra.map((l) => scene.layers.find((s) => s.id === l.id)?.share ?? 0.1))
+    allLayers().forEach((l, i) => {
+      if (l.rows[0] !== ranges[i][0] || l.rows[1] !== ranges[i][1]) l.reset = true
+      l.rows = ranges[i]
+    })
+  }
+
+  // Brings the extra layers in line with scene.layers: new sources compile,
+  // changed ones slide over (keeping their particles), removed ones go.
+  function syncLayers(specs: LayerSpec[]) {
+    const next: Layer[] = []
+    for (const s of specs) {
+      const old = extra.find((l) => l.id === s.id)
+      const sameSource = old && JSON.stringify({ ...old.spec, seed: undefined }) === JSON.stringify({ ...s.source, seed: undefined })
+      const program = sameSource ? old.program : programFor(s.source) // throws on bad GLSL before anything changes
+      next.push({
+        id: s.id, spec: structuredClone(s.source), program,
+        seed: sameSource ? old.seed : s.source.seed ?? randomSeed(),
+        since: sameSource ? old.since : t,
+        model: s.model ?? defaultModel(s.source),
+        space: s.space ?? "world",
+        at: s.at ?? [0, 0, 0],
+        scale: s.scale ?? 1,
+        rows: old?.rows ?? [0, 0],
+        reset: !old,
+        reseedUntil: sameSource ? old.reseedUntil : t + RESEED_CHANGE_TIME,
+      })
+    }
+    extra = next
+    assignRows()
+  }
 
   // Time, presence and the pending trip through the reservoir.
   const t0 = performance.now()
@@ -290,15 +355,18 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   let presenceTarget = 0
   let presenceRate = 1
   let dir = 1
-  let reseedUntil = -1
   let pending: { source: SourceSpec; program: SourceProgram; seed: Vec4; resumeAt: number } | null = null
   let nextAuto = Infinity
   let started = false
 
+  // Size the particles and place the layers the scene starts with.
+  allocate()
+  syncLayers(scene.layers)
+
   function activate(source: SourceSpec, program: SourceProgram, seed: Vec4) {
-    current = { program, seed, since: t }
+    Object.assign(base, { spec: structuredClone(source), program, seed, since: t })
     scene = { ...scene, source: structuredClone(source) }
-    reseedUntil = t + RESEED_CHANGE_TIME
+    base.reseedUntil = t + RESEED_CHANGE_TIME
     scheduleAuto()
     emit("source", structuredClone(source))
   }
@@ -328,7 +396,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     const via = reduced ? "direct" : morphOptions.via ?? scene.motion.via
     if (via === "direct" || presence < 0.02) {
       pending = null
-      if (via === "reservoir") resetAnchors = true
+      if (via === "reservoir") base.reset = true
       activate(source, program, seed)
       if (started && presenceTarget === 0) gather()
       return
@@ -378,7 +446,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     const cssW = canvas.clientWidth
     const cssH = canvas.clientHeight
     if (!cssW || !cssH) return
-    dpr = Math.min(window.devicePixelRatio || 1, QUALITY[quality].dprCap)
+    dpr = Math.min(window.devicePixelRatio || 1, QUALITY[quality].dprCap, baseModel().dprCap ?? Infinity)
     width = Math.round(cssW * dpr)
     height = Math.round(cssH * dpr)
     canvas.width = width
@@ -424,7 +492,17 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     }
     if (cam?.yaw !== undefined) view.yaw = scene.camera.yaw
     if (scene.camera.pitch !== prev.camera.pitch) view.pitch = scene.camera.pitch
-    if (scene.particles.count !== prev.particles.count) allocate()
+    if (patch.layers !== undefined) {
+      try {
+        syncLayers(scene.layers)
+      } catch (err) {
+        scene = { ...scene, layers: prev.layers }
+        throw err
+      }
+    }
+    base.model = scene.particles.model
+    const budgetChanged = (MODELS[prev.particles.model]?.budget ?? 1) !== (baseModel().budget ?? 1)
+    if (scene.particles.count !== prev.particles.count || budgetChanged) { allocate(); snapUntil = t + SNAP_TIME }
     if (patch.motion?.autoplay !== undefined) scheduleAuto()
     resize()
     readColors(false)
@@ -447,7 +525,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     particles = anchors = null
     buildPrograms()
     allocate()
-    current = { ...current, program: programFor(scene.source) }
+    base.program = programFor(base.spec)
+    for (const l of extra) l.program = programFor(l.spec)
     if (pending) pending = { ...pending, program: programFor(pending.source) }
     snapUntil = t + SNAP_TIME
     lost = false
@@ -528,7 +607,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     if (pending) {
       if (pending.resumeAt === Infinity && presence <= 0.001) pending.resumeAt = t + RESERVOIR_PAUSE + scene.motion.scatter * 0.4
       if (t >= pending.resumeAt) {
-        resetAnchors = true
+        base.reset = true
         activate(pending.source, pending.program, pending.seed)
         pending = null
         gather()
@@ -553,49 +632,58 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       view.yawVel *= decay
       view.pitchVel *= decay
     }
-    const model = orbit(view.yaw * DEG, view.pitch * DEG)
+    const orbitModel = orbit(view.yaw * DEG, view.pitch * DEG)
+    const IDENTITY = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1])
+    const modelOf = (l: Layer) => (l.space === "screen" ? IDENTITY : orbitModel)
     for (let i = 0; i < 3; i++) accent[i] += (accentTarget[i] - accent[i]) * (1 - Math.exp(-dt * 1.5))
 
     gl!.bindVertexArray(vao)
     gl!.disable(gl!.BLEND)
     gl!.viewport(0, 0, side, side)
+    gl!.enable(gl!.SCISSOR_TEST)
+    const layers = allLayers().filter((l) => l.rows[1] > l.rows[0])
 
-    // 1. Anchors onto the surface.
-    const sp = current.program
+    // 1. Anchors onto the surface, each layer in its own rows.
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, anchors.write.fb)
-    gl!.useProgram(sp.program)
-    bindTextures(gl!, 0, [[sp.u.uAnchor, anchors.read.textures[0]]])
-    gl!.uniform1f(sp.u.uTime, clock)
-    gl!.uniform1f(sp.u.uDt, dt)
-    gl!.uniform1f(sp.u.uAge, reduced ? 1e4 : t - current.since)
-    gl!.uniform4fv(sp.u.uSeed, current.seed)
-    gl!.uniform1f(sp.u.uReseed, t < reseedUntil ? RESEED_CHANGE : RESEED_REST)
-    gl!.uniform1f(sp.u.uReset, resetAnchors ? 1 : 0)
-    if ("range" in sp) gl!.uniform2f(sp.uRange, sp.range[0], sp.range[1])
-    if ("text" in sp) {
-      const x = sp.text
-      bindTextures(gl!, 1, [[sp.extra.uPoints, x.points], [sp.extra.uNormalPrev, anchors.read.textures[1]]])
-      gl!.uniformMatrix3fv(sp.extra.uModel, false, model)
-      gl!.uniform1f(sp.extra.uPointCount, x.count)
-      gl!.uniform1i(sp.extra.uPointsSide, x.side)
-      gl!.uniform1f(sp.extra.uCharCount, x.charCount)
-      gl!.uniform1f(sp.extra.uCharTime, x.charTime)
-      gl!.uniform1f(sp.extra.uDelay, x.delay)
-      gl!.uniform1fv(sp.extra.uCharX, x.charX)
-      // Keep letters' particles per CSS px of stroke the same on any screen:
-      // fewer when the text is drawn smaller, more when there are fewer
-      // particles overall.
-      const densityScale = clamp(viewScale * (REFERENCE_PARTICLES / (side * side)), 0.2, 1)
-      gl!.uniform4f(sp.extra.uCursor, x.cursor[0], x.cursor[1], x.cursor[2], x.cursor[3] * densityScale)
-      gl!.uniform1f(sp.extra.uDensity, x.density * densityScale)
-      gl!.uniform1i(sp.extra.uGlyphMode, x.mode)
-      gl!.uniform1f(sp.extra.uWeight, x.weight)
+    for (const l of layers) {
+      const sp = l.program
+      const model = modelOf(l)
+      gl!.scissor(0, l.rows[0], side, l.rows[1] - l.rows[0])
+      gl!.useProgram(sp.program)
+      bindTextures(gl!, 0, [[sp.u.uAnchor, anchors.read.textures[0]]])
+      gl!.uniform1f(sp.u.uTime, clock)
+      gl!.uniform1f(sp.u.uDt, dt)
+      gl!.uniform1f(sp.u.uAge, reduced ? 1e4 : t - l.since)
+      gl!.uniform4fv(sp.u.uSeed, l.seed)
+      gl!.uniform1f(sp.u.uReseed, t < l.reseedUntil ? RESEED_CHANGE : RESEED_REST)
+      gl!.uniform1f(sp.u.uReset, l.reset ? 1 : 0)
+      if ("range" in sp) gl!.uniform2f(sp.uRange, sp.range[0], sp.range[1])
+      if ("text" in sp) {
+        const x = sp.text
+        bindTextures(gl!, 1, [[sp.extra.uPoints, x.points], [sp.extra.uNormalPrev, anchors.read.textures[1]]])
+        gl!.uniformMatrix3fv(sp.extra.uModel, false, model)
+        gl!.uniform1f(sp.extra.uPointCount, x.count)
+        gl!.uniform1i(sp.extra.uPointsSide, x.side)
+        gl!.uniform1f(sp.extra.uCharCount, x.charCount)
+        gl!.uniform1f(sp.extra.uCharTime, x.charTime)
+        gl!.uniform1f(sp.extra.uDelay, x.delay)
+        gl!.uniform1fv(sp.extra.uCharX, x.charX)
+        // Keep letters' particles per CSS px of stroke the same on any screen:
+        // fewer when the text is drawn smaller (or scaled down), more when the
+        // layer has fewer particles.
+        const count = (l.rows[1] - l.rows[0]) * side
+        const densityScale = clamp(viewScale * l.scale * (REFERENCE_PARTICLES / count), 0.2, 1)
+        gl!.uniform4f(sp.extra.uCursor, x.cursor[0], x.cursor[1], x.cursor[2], x.cursor[3] * densityScale)
+        gl!.uniform1f(sp.extra.uDensity, x.density * densityScale)
+        gl!.uniform1i(sp.extra.uGlyphMode, x.mode)
+        gl!.uniform1f(sp.extra.uWeight, x.weight)
+      }
+      gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+      l.reset = false
     }
-    gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     anchors.swap()
-    resetAnchors = false
 
-    // 2. Particles.
+    // 2. Particles, each layer with its model's flight.
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, particles.write.fb)
     gl!.useProgram(update)
     bindTextures(gl!, 0, [
@@ -603,7 +691,6 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       [uu.uVel, particles.read.textures[1]],
       [uu.uAnchor, anchors.read.textures[0]],
     ])
-    gl!.uniformMatrix3fv(uu.uModel, false, model)
     gl!.uniform1f(uu.uTime, clock)
     gl!.uniform1f(uu.uDt, dt)
     gl!.uniform1f(uu.uPresence, reduced ? presenceTarget : presence)
@@ -613,17 +700,28 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     gl!.uniform2f(uu.uView, viewVec[0], viewVec[1])
     const r = scene.reservoir
     gl!.uniform4f(uu.uReservoir, RESERVOIR_MODES[r.mode] ?? 1, clamp(r.height, 0, 1), clamp(r.opacity, 0, 1), r.drift)
-    gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : "text" in sp ? 0.1 : 0.02)
     // Text leaves most particles resting; dim them so the band keeps its usual weight.
+    const bp = base.program
     const reserve = clamp(scene.motion.reserve, 0.02, 1)
-    const resting = "text" in sp ? Math.max(reserve, 1 - sp.text.density - sp.text.cursor[3]) : reserve
+    const resting = "text" in bp ? Math.max(reserve, 1 - bp.text.density - bp.text.cursor[3]) : reserve
     restDim += (Math.min(1, reserve / resting) - restDim) * (1 - Math.exp(-dt * 1.5))
     gl!.uniform1f(uu.uRestDim, restDim)
     gl!.uniform1f(uu.uSnap, snap ? 1 : 0)
     gl!.uniform1f(uu.uReset, resetParticles ? 1 : 0)
-    gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+    for (const l of layers) {
+      const m = MODELS[l.model] ?? MODELS.sculpt
+      gl!.scissor(0, l.rows[0], side, l.rows[1] - l.rows[0])
+      gl!.uniformMatrix3fv(uu.uModel, false, modelOf(l))
+      gl!.uniform1f(uu.uCapture, Math.max(m.capture, MIN_CAPTURE[l.spec.type] ?? 0))
+      gl!.uniform4fv(uu.uFlight, m.flight)
+      const at = l.at
+      if (l.space === "screen") gl!.uniform4f(uu.uLayer, (at[0] ?? 0) * viewVec[0], (at[1] ?? 0) * viewVec[1], at[2] ?? 0, l.scale)
+      else gl!.uniform4f(uu.uLayer, at[0] ?? 0, at[1] ?? 0, at[2] ?? 0, l.scale)
+      gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+    }
     particles.swap()
     resetParticles = false
+    gl!.disable(gl!.SCISSOR_TEST)
 
     // ASCII cells shrink with the view (to half size at most), so letters
     // and forms keep about as many characters across on a phone.
@@ -632,7 +730,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     // 3. Draw, in the scene's style.
     const st = scene.style
     type ShadingU = Record<(typeof SHADING_UNIFORMS)[number], WebGLUniformLocation | null>
-    const shading = (u: ShadingU) => {
+    const shading = (u: ShadingU, model: Float32Array) => {
       bindTextures(gl!, 0, [
         [u.uPos, particles!.read.textures[0]],
         [u.uVel, particles!.read.textures[1]],
@@ -650,17 +748,25 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.uniform3fv(u.uAccent, accent)
       gl!.uniform3fv(u.uLoose, colors.loose)
     }
+    // Every layer draws its own rows, with its model's size and snapping.
     const drawPoints = (shape: number, size: number, gain: number, stride = 1) => {
       gl!.useProgram(points)
-      shading(pu)
       const a = shape === SHAPE.glyph ? ensureAtlas() : null
       if (a) bindTextures(gl!, 3, [[pu.uAtlas, a.tex]])
-      gl!.uniform1f(pu.uPointSize, size)
       gl!.uniform1i(pu.uShape, shape)
       gl!.uniform1f(pu.uGlyphCount, a?.count ?? 1)
       gl!.uniform1f(pu.uGain, gain)
       gl!.uniform1i(pu.uStride, stride)
-      gl!.drawArrays(gl!.POINTS, 0, Math.ceil((side * side) / stride))
+      gl!.uniform2f(pu.uResolution, gl!.drawingBufferWidth, gl!.drawingBufferHeight)
+      for (const l of layers) {
+        const m = MODELS[l.model] ?? MODELS.sculpt
+        shading(pu, modelOf(l))
+        gl!.uniform1f(pu.uPointSize, shape === SHAPE.glyph ? size : size * m.size)
+        gl!.uniform1f(pu.uPixelSnap, m.snap && shape !== SHAPE.glyph ? 1 : 0)
+        const first = l.rows[0] * side
+        gl!.uniform1i(pu.uFirst, first)
+        gl!.drawArrays(gl!.POINTS, first, Math.ceil(((l.rows[1] - l.rows[0]) * side) / stride))
+      }
     }
 
     if (st.kind === "ascii" && st.ascii.grid) {
@@ -713,9 +819,11 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     else drawPoints(st.kind === "squares" ? SHAPE.square : SHAPE.round, st.size * dpr, 0)
     if (st.kind === "streaks") {
       gl!.useProgram(streaks)
-      shading(su)
       gl!.uniform1f(su.uTrail, st.streaks.length)
-      gl!.drawArrays(gl!.LINES, 0, side * side * 2)
+      for (const l of layers) {
+        shading(su, modelOf(l))
+        gl!.drawArrays(gl!.LINES, l.rows[0] * side * 2, (l.rows[1] - l.rows[0]) * side * 2)
+      }
     }
     gl!.disable(gl!.BLEND)
     flushCaptures()

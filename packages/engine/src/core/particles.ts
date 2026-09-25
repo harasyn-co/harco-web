@@ -34,6 +34,8 @@ uniform vec2 uView;          // half width, half height (world units at z = 0)
 uniform vec2 uCamera;        // camera distance, 1 = perspective
 uniform vec4 uReservoir;     // mode, height (share of the view), opacity, drift
 uniform float uCapture;      // distance at which a particle in flight latches on
+uniform vec4 uFlight;        // the model's base speed, speed per distance, swirl, steering
+uniform vec4 uLayer;         // the layer's placement: offset xyz (world), scale
 uniform float uRestDim;      // scales resting visibility, so a crowded reservoir isn't brighter
 uniform float uSnap;         // 1 = jump straight to where each particle belongs
 uniform float uReset;        // 1 = put every particle at home
@@ -93,7 +95,7 @@ void main() {
   vec4 P = texelFetch(uPos, cell, 0);
   vec4 V = texelFetch(uVel, cell, 0);
   vec4 A = texelFetch(uAnchor, cell, 0);
-  vec3 target = uModel * A.xyz;
+  vec3 target = uModel * A.xyz * uLayer.w + uLayer.xyz;
   Home h = home(id, target);
   h.vis *= uRestDim;
 
@@ -131,10 +133,13 @@ void main() {
   } else if (wants) {
     // In flight: steer towards the anchor, wandering like grains in a current.
     vec3 dir = to / max(dist, 1e-4);
-    float speed = 0.6 + 1.8 * dist + uCapture * 8.0;
-    vec3 swirl = noise33(pos * 1.6 + vec3(0.0, uTime * 0.25, rank * 7.0));
-    vec3 desired = dir * speed + cross(dir, swirl) * speed * 0.9 * smoothstep(0.05, 0.6, dist);
-    vel = mix(vel, desired, 1.0 - exp(-dt * 3.0));
+    float speed = uFlight.x + uFlight.y * dist + uCapture * 8.0;
+    vec3 desired = dir * speed;
+    if (uFlight.z > 0.0) {
+      vec3 swirl = noise33(pos * 1.6 + vec3(0.0, uTime * 0.25, rank * 7.0));
+      desired += cross(dir, swirl) * speed * uFlight.z * smoothstep(0.05, 0.6, dist);
+    }
+    vel = mix(vel, desired, 1.0 - exp(-dt * uFlight.w));
     pos += vel * dt;
     // Pull in firmly over the last stretch so particles land.
     float close = smoothstep(0.12, 0.0, dist);

@@ -1,8 +1,8 @@
 // The setting tabs: Style (how particles look), Scene (what they form),
 // Behavior (how it moves, where idle particles wait, the view) and Text.
 import {
-  CURVES, CURVE_NAMES, FORMS, FORM_NAMES, PALETTES,
-  type CurveName, type FormName, type Palette, type PaletteName, type Scene,
+  CURVES, CURVE_NAMES, FORMS, FORM_NAMES, MODELS, MODEL_NAMES, PALETTES,
+  type CurveName, type FormName, type LayerSpec, type ModelName, type Palette, type PaletteName, type Scene,
 } from "@harasyn/engine"
 import { ui, type Ctx } from "./ui"
 
@@ -93,6 +93,70 @@ export function settingTabs(ctx: Ctx) {
     ), () => scene().style.kind === "ascii"),
   ]
 
+  // Models: how a layer's particles move and draw, with a line on each.
+  const modelNote = (get: () => ModelName) => {
+    const note = el("p", { className: "hs-hint" })
+    ctx.refreshers.push(() => (note.textContent = MODELS[get()]?.description ?? ""))
+    return note
+  }
+  const baseModel = () => scene().particles.model
+  const modelTiles = tiles(MODEL_NAMES, (m) => MODELS[m].label, baseModel, (model) => set({ particles: { model } }))
+
+  // Layers: more sources over the main one, each with its own particles.
+  // The list is rebuilt when layers come or go; controls read by id.
+  const layers = () => scene().layers
+  const layer = (id: string) => layers().find((l) => l.id === id)
+  const setLayer = (id: string, change: Partial<LayerSpec>) => set({ layers: layers().map((l) => (l.id === id ? { ...l, ...change } : l)) })
+  const newId = (stem: string) => { let i = 1; while (layer(`${stem}-${i}`)) i++; return `${stem}-${i}` }
+  const PLACES = { top: [0, 0.62], middle: [0, 0], bottom: [0, -0.55] } as const
+  type Place = keyof typeof PLACES
+  const placeOf = (l?: LayerSpec): Place => (Object.keys(PLACES) as Place[]).find((k) => l?.at && l.at[1] === PLACES[k][1]) ?? ("" as Place)
+  const addHeadline = () => set({ layers: [...layers(), {
+    id: newId("text"), share: 0.2, model: "type", space: "screen", at: [...PLACES.top], scale: 0.7,
+    source: { type: "text", text: "Headline" },
+  }] })
+  const addForm = () => set({ layers: [...layers(), {
+    id: newId("form"), share: 0.2, model: "sculpt", space: "screen", at: [0, -0.55], scale: 0.35,
+    source: { type: "shape", form: FORM_NAMES[0] },
+  }] })
+
+  // Cards keep their own refreshers, dropped with them when the list rebuilds.
+  let cardRefreshers: (() => void)[] = []
+  const card = ui({ ...ctx, get refreshers() { return cardRefreshers } })
+  function layerCard(id: string) {
+    const { tiles, slider, row, button } = card
+    const l = layer(id)!
+    const kids: Node[] = []
+    if (l.source.type === "text") {
+      const input = el("input", { type: "text", value: l.source.text, spellcheck: false, ariaLabel: `Text for ${id}` })
+      input.addEventListener("change", async () => { await ctx.attempt(() => setLayer(id, { source: { type: "text", text: input.value || " " } })); ctx.record(); ctx.refresh() })
+      kids.push(input)
+    } else if (l.source.type === "shape") {
+      kids.push(tiles(FORM_NAMES, (f) => FORMS[f].label, () => { const s = layer(id)?.source; return s?.type === "shape" ? s.form : ("" as FormName) },
+        (form) => setLayer(id, { source: { type: "shape", form } })))
+    }
+    kids.push(
+      tiles(MODEL_NAMES, (m) => MODELS[m].label, () => layer(id)?.model ?? "sculpt", (model) => setLayer(id, { model })),
+      tiles(["top", "middle", "bottom"] as const, (p) => p[0].toUpperCase() + p.slice(1), () => placeOf(layer(id)),
+        (p) => setLayer(id, { space: "screen", at: [...PLACES[p]] })),
+      slider("Size", 0.1, 1.5, 0.05, () => layer(id)?.scale ?? 1, (scale) => setLayer(id, { scale })),
+      slider("Particles", 0.02, 0.6, 0.01, () => layer(id)?.share ?? 0.2, (share) => setLayer(id, { share })),
+      row(button("Remove", () => set({ layers: layers().filter((x) => x.id !== id) }), "hs-quiet", { record: true })),
+    )
+    return el("div", { className: "hs-layer" }, [el("h4", { textContent: id }), ...kids])
+  }
+  const list = el("div", { className: "hs-layers" })
+  let shown = ""
+  ctx.refreshers.push(() => {
+    const now = layers().map((l) => `${l.id}:${l.source.type}`).join()
+    if (now !== shown) {
+      shown = now
+      cardRefreshers = []
+      list.replaceChildren(...layers().map((l) => layerCard(l.id)))
+    }
+    cardRefreshers.forEach((f) => f())
+  })
+
   const sceneTab = [
     group("Form",
       tiles(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),
@@ -103,6 +167,11 @@ export function settingTabs(ctx: Ctx) {
         field.morph({ type: "curve", curve })
       }),
       row(button("Scatter", () => field.scatter()), button("Gather", () => field.gather())),
+    ),
+    group("Model", modelTiles, modelNote(baseModel)),
+    group("Layers",
+      list,
+      row(button("+ Headline", addHeadline, "", { record: true }), button("+ Form", addForm, "", { record: true })),
     ),
   ]
 

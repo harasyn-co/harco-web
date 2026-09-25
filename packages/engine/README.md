@@ -23,7 +23,8 @@ scenes. The parts:
 | `source`    | What the particles gather into: a built-in `shape`, a custom `sdf`, a self-drawing `curve`, or typed `text` |
 | `style`     | How particles are drawn (`dots`, `squares`, `streaks`, `ascii`), size, opacity, `palette` |
 | `camera`    | `perspective` or `isometric`, yaw, pitch, spin, zoom, drag to rotate |
-| `particles` | Particle `count`, or `"auto"` to pick by device and adapt to frame rate |
+| `particles` | Particle `count` (or `"auto"` to pick by device and adapt to frame rate), and the main source's `model` |
+| `layers`    | More sources drawn at once, each with a share of the particles, its own model and placement |
 | `reservoir` | Where idle particles wait: a soft `band`, `field` dust, or `none`    |
 | `motion`    | Gather and scatter timing, reserve share, `via`, and `autoplay`      |
 
@@ -76,6 +77,38 @@ sources, so text can sit in the rotation:
 
 GLSL that fails to compile throws from `morph`/`set` and leaves the current
 source in place.
+
+## Layers and models
+
+A scene can draw several sources at once. `source` is the main one; each entry
+in `layers` adds another, with its own share of the particles (they're taken
+from the main source's):
+
+```json
+"layers": [
+  { "id": "headline", "share": 0.2, "model": "type", "space": "screen", "at": [0, 0.62], "scale": 0.7,
+    "source": { "type": "text", "text": "Hello" } }
+]
+```
+
+`space: "screen"` keeps a layer still in front of the viewer, placed by `at`
+from -1 to 1 across the view; `"world"` (the default) turns with the camera,
+placed in world units. Keep a layer's `id` when changing it: a new `source`
+under the same id slides its particles over, and a new id starts afresh.
+
+A **model** tunes how a layer's particles move and draw for one job
+(`MODELS` has the numbers):
+
+| Model    | For                                                              |
+| -------- | ---------------------------------------------------------------- |
+| `sculpt` | 3D forms: drifts in on a current and rides the surface (default)  |
+| `type`   | Text and UI: fast and direct, snapped to the pixel grid (default for text layers) |
+| `relief` | Image shapes: dense and steady, slightly larger                  |
+| `wave`   | Harmonics: springy, keeps up with fast-changing shapes           |
+| `lite`   | Modest hardware: half the particles, no swirl, 1x pixels         |
+
+`particles.model` sets the main source's model; `lite` there also halves the
+particle count and caps the pixel ratio for the whole field.
 
 ## Studio
 

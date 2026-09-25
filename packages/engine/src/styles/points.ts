@@ -14,15 +14,23 @@ uniform float uPointSize;   // device px
 uniform float uGlyphCount;  // characters in the atlas, for glyph sprites
 uniform float uGain;        // brightness multiplier when choosing a glyph
 uniform int uStride;        // draw every nth particle (glyphs need room)
+uniform int uFirst;         // the first particle of the layer being drawn
+uniform vec2 uResolution;   // drawing size, device px
+uniform float uPixelSnap;   // 1 = centre particles on device pixels
 
 out vec4 vColor;
 out float vSize;
 flat out float vGlyph;
 
 void main() {
-  Particle p = fetchParticle(gl_VertexID * uStride);
+  Particle p = fetchParticle(uFirst + (gl_VertexID - uFirst) * uStride);
   float k;
   gl_Position = project(p.world, k);
+  if (uPixelSnap > 0.5) {
+    // Crisp text and UI: land each particle on the centre of a pixel.
+    vec2 px = (gl_Position.xy * 0.5 + 0.5) * uResolution;
+    gl_Position.xy = ((floor(px) + 0.5) / uResolution) * 2.0 - 1.0;
+  }
   vSize = max(1.0, uPointSize * k);
   gl_PointSize = vSize;
   vColor = shade(p);

@@ -244,6 +244,16 @@
             }
           ],
           "description": "Number of particles, rounded to a square. \"auto\" picks by device and steps down if frames run slow."
+        },
+        "model": {
+          "enum": [
+            "sculpt",
+            "type",
+            "relief",
+            "wave",
+            "lite"
+          ],
+          "description": "How the base layer's particles move and draw. sculpt: 3D forms, drifting in on a current. type: text and UI, fast and crisp on the pixel grid. relief: image shapes, dense and steady. wave: harmonics, springy. lite: modest hardware, half the particles, no swirl."
         }
       }
     },
@@ -351,6 +361,68 @@
               }
             }
           ]
+        }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "maxItems": 6,
+      "description": "Extra layers over the base source, drawn at the same time, each with its own share of the particles and particle model. Replaced whole.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "source",
+          "share"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "a name in lower case letters, digits and dashes, like headline (keep it when changing a layer, so its particles stay put)"
+          },
+          "source": {
+            "$ref": "#/$defs/source"
+          },
+          "share": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 0.9,
+            "description": "Share of all particles this layer uses."
+          },
+          "model": {
+            "enum": [
+              "sculpt",
+              "type",
+              "relief",
+              "wave",
+              "lite"
+            ],
+            "description": "Defaults to type for text, sculpt for everything else."
+          },
+          "space": {
+            "enum": [
+              "world",
+              "screen"
+            ],
+            "description": "world turns with the camera; screen stays flat and fixed, for UI."
+          },
+          "at": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            },
+            "description": "Where the layer's centre sits. World: [x, y, z] in world units (forms are ~2 across). Screen: [x, y] from -1 to 1 across the view."
+          },
+          "scale": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 10,
+            "description": "Size multiplier."
+          }
         }
       }
     }
