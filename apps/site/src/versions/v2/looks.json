@@ -1,0 +1,49 @@
+{
+  "active": "v1-classic",
+  "looks": {
+    "v1-classic": {
+      "source": {
+        "type": "shape",
+        "form": "cells"
+      },
+      "style": {
+        "kind": "dots",
+        "size": 1.5,
+        "opacity": 1,
+        "palette": "v1"
+      },
+      "camera": {
+        "projection": "perspective",
+        "pitch": 15,
+        "spin": 4.5,
+        "zoom": 1,
+        "drag": true
+      },
+      "particles": {
+        "count": "auto"
+      },
+      "reservoir": {
+        "mode": "band",
+        "height": 0.12,
+        "opacity": 0.55,
+        "drift": 0.05
+      },
+      "motion": {
+        "gather": 3,
+        "scatter": 2.5,
+        "reserve": 0.12,
+        "via": "reservoir",
+        "autoplay": {
+          "forms": [
+            "cells",
+            "gyroid",
+            "knot",
+            "harmonic",
+            "chladni"
+          ],
+          "hold": 12
+        }
+      }
+    }
+  }
+}
