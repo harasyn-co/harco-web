@@ -106,6 +106,45 @@
             }
           }
         },
+        "type": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How text is set, for every text source that doesn't set these itself.",
+          "properties": {
+            "glyphs": {
+              "enum": [
+                "strokes",
+                "matrix",
+                "font"
+              ],
+              "description": "strokes: single-stroke Hershey letters written stroke by stroke. matrix: dot-matrix. font: a sampled web font."
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.5,
+              "description": "Stroke width or dot size, as a share of the capital height."
+            },
+            "density": {
+              "type": "number",
+              "minimum": 0.005,
+              "maximum": 1,
+              "description": "Share of particles that make the letters."
+            },
+            "speed": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 60,
+              "description": "Characters typed per second."
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 6,
+              "description": "Width of a line in world units; the forms are about 2 across."
+            }
+          }
+        },
         "ascii": {
           "type": "object",
           "additionalProperties": false,
@@ -423,7 +462,7 @@
         },
         {
           "type": "object",
-          "description": "Text typed out in particles, always facing the viewer, with a block cursor that blinks once typing is done. The letters are pulled out of whatever was showing before, which crumbles away as the line types.",
+          "description": "Text typed out in particles, always facing the viewer, with a block cursor that blinks once typing is done. The letters are pulled out of whatever was showing before, which crumbles away as the line types. Settings left out come from style.type.",
           "additionalProperties": false,
           "required": [
             "type",
@@ -445,13 +484,13 @@
                 "matrix",
                 "font"
               ],
-              "description": "How letters are made. strokes: single-stroke Hershey letters, written stroke by stroke with particles along each stroke (default). matrix: dot-matrix letters, each dot a cluster. font: a web font's filled letters, sampled."
+              "description": "How letters are made. strokes: single-stroke Hershey letters, written stroke by stroke with particles along each stroke (default). matrix: dot-matrix letters, each dot a cluster. font: a web font's filled letters, sampled. Overrides style.type."
             },
             "weight": {
               "type": "number",
               "minimum": 0,
               "maximum": 0.5,
-              "description": "Stroke width (strokes) or dot size (matrix), as a share of the capital height. Default 0.08."
+              "description": "Stroke width (strokes) or dot size (matrix), as a share of the capital height. Overrides style.type."
             },
             "font": {
               "type": "string",
@@ -462,13 +501,13 @@
               "type": "number",
               "minimum": 0.2,
               "maximum": 6,
-              "description": "Width of the text in world units; the forms are about 2 across. Default 2.4."
+              "description": "Width of the text in world units; the forms are about 2 across. Overrides style.type."
             },
             "speed": {
               "type": "number",
               "minimum": 0.5,
               "maximum": 60,
-              "description": "Characters typed per second. Default 9."
+              "description": "Characters typed per second. Overrides style.type."
             },
             "cursor": {
               "type": "boolean",
@@ -478,7 +517,7 @@
               "type": "number",
               "minimum": 0.005,
               "maximum": 1,
-              "description": "Share of particles that make the letters. Low values let the grain show; high values read as solid type. Default 0.05."
+              "description": "Share of particles that make the letters. Low values let the grain show; high values read as solid type. Overrides style.type."
             },
             "seed": {
               "$ref": "#/$defs/seed"

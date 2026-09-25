@@ -50,6 +50,19 @@ export interface Palette {
   loose: string
 }
 
+export interface TypeSpec {
+  /** strokes: single-stroke letters written stroke by stroke. matrix: dot-matrix. font: a sampled web font. */
+  glyphs: "strokes" | "matrix" | "font"
+  /** Stroke width or dot size, as a share of the capital height. */
+  weight: number
+  /** Share of particles that make the letters. */
+  density: number
+  /** Characters typed per second. */
+  speed: number
+  /** Width of a line in world units (the forms are ~2 across). */
+  width: number
+}
+
 export interface StyleSpec {
   /**
    * How each particle is drawn. "dots": soft round points. "squares": crisp
@@ -66,6 +79,8 @@ export interface StyleSpec {
     /** Seconds of motion each streak covers. */
     length: number
   }
+  /** How text is set, for every text source that doesn't say otherwise. */
+  type: TypeSpec
   ascii: {
     /** Character cell size in CSS px. */
     cell: number
@@ -191,6 +206,7 @@ export const DEFAULT_SCENE: Scene = {
     opacity: 1,
     palette: { ...PALETTES.v1 },
     streaks: { length: 0.06 },
+    type: { glyphs: "strokes", weight: 0.08, density: 0.05, speed: 9, width: 2.4 },
     ascii: {
       cell: 10,
       chars: " .:-=+*#%@",

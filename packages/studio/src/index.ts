@@ -147,16 +147,30 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     field.set(patch)
   }
 
-  // Text: type a line in particles, and try its glyphs and settings. Each
-  // change types the line again. Starts from the text on screen, if any.
-  type TextSource = Extract<ScenePatch["source"], { type: "text" }>
+  // Text: the style's type settings, previewed on a line of your choosing.
+  // Typing a preview holds autoplay so the line stays up while you tune it.
   const onScreen = scene().source
-  let textSpec: TextSource = onScreen.type === "text" ? onScreen : { type: "text", text: "in experimentation mode" }
-  const textInput = el("input", { type: "text", value: textSpec.text, spellcheck: false, placeholder: "text to type" })
-  textInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void attempt(() => typeText({})); refresh() } })
-  function typeText(change: Partial<TextSource>) {
-    textSpec = { ...textSpec, ...change, text: textInput.value || textSpec.text }
-    field.morph(textSpec)
+  const textInput = el("input", { type: "text", value: onScreen.type === "text" ? onScreen.text : "in experimentation mode", spellcheck: false, placeholder: "text to preview" })
+  function previewText() {
+    set({ motion: { autoplay: null } })
+    field.morph({ type: "text", text: textInput.value || "in experimentation mode" }, { via: "direct" })
+  }
+  textInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void attempt(previewText); refresh() } })
+  const setType = (type: Partial<Scene["style"]["type"]>) => {
+    set({ style: { type } })
+    if (scene().source.type !== "text") previewText()
+  }
+  // Copies only the type settings into the site's default look.
+  async function saveTypeToSite() {
+    const store = options.looks!
+    const current = await store.load()
+    const name = current.active
+    if (!name || !current.looks[name]) throw new Error("There's no site default look to save into yet")
+    const look = structuredClone(current.looks[name]) as ScenePatch
+    look.style = { ...look.style, type: scene().style.type }
+    looks = await store.save(name, look as Scene, true)
+    renderLooks()
+    flash(`type saved to ${name}, the site's default`)
   }
 
   // Scene JSON.
@@ -297,14 +311,14 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       slider("Scatter s", 0.5, 10, 0.1, () => scene().motion.scatter, (scatter) => set({ motion: { scatter } })),
     ),
     section("Text",
-      row(textInput),
+      row(textInput, button("Type it", previewText)),
       segmented(["strokes", "matrix", "font"] as const, (v) => ({ strokes: "Strokes", matrix: "Dot matrix", font: "Font" })[v],
-        () => textSpec.glyphs ?? "strokes", (glyphs) => typeText({ glyphs })),
-      slider("Density", 0.005, 0.3, 0.005, () => textSpec.density ?? 0.05, (density) => typeText({ density })),
-      slider("Weight", 0, 0.3, 0.01, () => textSpec.weight ?? 0.08, (weight) => typeText({ weight })),
-      slider("Speed", 2, 40, 1, () => textSpec.speed ?? 9, (speed) => typeText({ speed })),
-      slider("Width", 0.6, 4, 0.1, () => textSpec.width ?? 2.4, (width) => typeText({ width })),
-      row(button("Type it", () => typeText({}))),
+        () => scene().style.type.glyphs, (glyphs) => setType({ glyphs })),
+      slider("Weight", 0, 0.3, 0.01, () => scene().style.type.weight, (weight) => setType({ weight })),
+      slider("Density", 0.005, 0.3, 0.005, () => scene().style.type.density, (density) => setType({ density })),
+      slider("Speed", 2, 40, 1, () => scene().style.type.speed, (speed) => setType({ speed })),
+      slider("Width", 0.6, 4, 0.1, () => scene().style.type.width, (width) => setType({ width })),
+      ...(options.looks ? [row(button("Save type to site default", saveTypeToSite))] : []),
     ),
     section("Form",
       segmented(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),

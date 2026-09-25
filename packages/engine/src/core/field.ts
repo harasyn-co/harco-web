@@ -231,21 +231,21 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   // Compiled source programs, by kind and code.
   function programFor(source: SourceSpec): SourceProgram {
     if (source.type === "text") {
-      const key = `text:${JSON.stringify({ ...source, seed: undefined })}`
-      let p = programs.get(key)
-      if (!p) {
-        p = compileText(gl!, {
-          text: source.text,
-          font: source.font ?? TEXT_FONT,
-          width: source.width ?? 2.4,
-          speed: source.speed ?? 9,
-          cursor: source.cursor ?? true,
-          density: source.density ?? 0.05,
-          glyphs: source.glyphs ?? "strokes",
-          weight: source.weight ?? 0.08,
-        })
-        programs.set(key, p)
+      // The line's own settings win; the rest come from the style's type.
+      const type = scene.style.type
+      const options = {
+        text: source.text,
+        font: source.font ?? TEXT_FONT,
+        width: source.width ?? type.width,
+        speed: source.speed ?? type.speed,
+        cursor: source.cursor ?? true,
+        density: source.density ?? type.density,
+        glyphs: source.glyphs ?? type.glyphs,
+        weight: source.weight ?? type.weight,
       }
+      const key = `text:${JSON.stringify(options)}`
+      let p = programs.get(key)
+      if (!p) programs.set(key, (p = compileText(gl!, options)))
       return p
     }
     if (source.type === "curve") {
@@ -408,6 +408,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     resize()
     readColors(false)
     if (source) morph(source)
+    // New type settings retype the text on screen.
+    else if (patch.style?.type && scene.source.type === "text") morph(scene.source, { via: "direct" })
   }
 
   // Context loss: stop drawing, and rebuild everything when it comes back.
