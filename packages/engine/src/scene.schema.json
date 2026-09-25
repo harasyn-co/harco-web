@@ -16,7 +16,7 @@
           "required": ["type", "form"],
           "properties": {
             "type": { "const": "shape" },
-            "form": { "enum": ["cells", "gyroid", "knot", "harmonic", "chladni"], "description": "cells: living cells that divide and fuse. gyroid: a breathing minimal surface in a sphere. knot: a flowing torus knot. harmonic: a radiolarian made of spherical harmonics. chladni: sand on a vibrating plate, drifting between modes." },
+            "form": { "enum": ["cells", "gyroid", "knot", "harmonic"], "description": "cells: living cells that divide and fuse. gyroid: a breathing minimal surface in a sphere. knot: a flowing torus knot. harmonic: a radiolarian made of spherical harmonics." },
             "seed": { "$ref": "#/$defs/seed" }
           }
         },
@@ -142,7 +142,7 @@
               "additionalProperties": false,
               "required": ["forms", "hold"],
               "properties": {
-                "forms": { "type": "array", "minItems": 1, "items": { "enum": ["cells", "gyroid", "knot", "harmonic", "chladni"] } },
+                "forms": { "type": "array", "minItems": 1, "items": { "enum": ["cells", "gyroid", "knot", "harmonic"] } },
                 "hold": { "type": "number", "minimum": 1, "description": "Seconds each form holds after gathering." }
               }
             }
