@@ -22,6 +22,8 @@ npm run dev          # site dev server
 npm run build        # site production build -> apps/site/dist
 npm run lint
 npm run typecheck    # every workspace
+npm test             # unit tests (also run before every deploy)
+npm run smoke        # builds the site and studio, checks both in headless Chrome
 ```
 
 Preview a site version other than the live one:
