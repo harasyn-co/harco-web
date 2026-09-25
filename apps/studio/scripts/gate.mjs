@@ -88,12 +88,17 @@ const gate = `<!doctype html>
   }
   // A remembered key opens straight away; a stale one (after the key changes) is dropped.
   try {
-    const saved = localStorage.getItem(STORE);
+    const saved = window.crypto && crypto.subtle && localStorage.getItem(STORE);
     if (saved) open(bytes(saved)).catch(() => localStorage.removeItem(STORE));
   } catch {}
+  // Browsers only allow the decryption on secure (https) pages.
+  if (!window.crypto || !crypto.subtle) {
+    document.getElementById("msg").textContent = "Open the studio over https to unlock it.";
+  }
   document.getElementById("gate").addEventListener("submit", async (e) => {
     e.preventDefault();
     const msg = document.getElementById("msg");
+    if (!window.crypto || !crypto.subtle) { msg.textContent = "Open the studio over https to unlock it."; return; }
     msg.textContent = "";
     const remember = document.getElementById("remember").checked;
     try {
