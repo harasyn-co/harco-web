@@ -114,9 +114,57 @@ float fBulb(vec3 p, vec4 s) {
   }
   return 0.5 * log(max(r, 1e-5)) * r / dr / 1.2;
 }
+
+// Quadratic Bezier distance (Inigo Quilez), for the pi glyph's strokes.
+float dot2(vec2 v) { return dot(v, v); }
+float sdBezier(vec2 pos, vec2 A, vec2 B, vec2 C) {
+  vec2 a = B - A;
+  vec2 b = A - 2.0 * B + C;
+  vec2 c = a * 2.0;
+  vec2 d = A - pos;
+  float kk = 1.0 / dot(b, b);
+  float kx = kk * dot(a, b);
+  float ky = kk * (2.0 * dot(a, a) + dot(d, b)) / 3.0;
+  float kz = kk * dot(d, a);
+  float res;
+  float p = ky - kx * kx;
+  float q = kx * (2.0 * kx * kx - 3.0 * ky) + kz;
+  float h = q * q + 4.0 * p * p * p;
+  if (h >= 0.0) {
+    h = sqrt(h);
+    vec2 x = (vec2(h, -h) - q) / 2.0;
+    vec2 uv = sign(x) * pow(abs(x), vec2(1.0 / 3.0));
+    float t = clamp(uv.x + uv.y - kx, 0.0, 1.0);
+    res = dot2(d + (c + b * t) * t);
+  } else {
+    float z = sqrt(-p);
+    float v = acos(q / (p * z * 2.0)) / 3.0;
+    float m = cos(v);
+    float n = sin(v) * 1.732050808;
+    vec3 t = clamp(vec3(m + m, -n - m, n - m) * z - kx, 0.0, 1.0);
+    res = min(dot2(d + (c + b * t.x) * t.x), dot2(d + (c + b * t.y) * t.y));
+  }
+  return sqrt(res);
+}
+
+// Pi: the glyph as a rounded solid. An arched bar over two curved legs,
+// the right one kicking out at the foot. The strokes breathe and the bar
+// sways gently.
+float fPi(vec3 p, vec4 s) {
+  float t = uTime * 0.5 + s.x * 6.0;
+  vec2 q = p.xy;
+  float sway = 0.04 * sin(t * 0.7);
+  float bar = sdBezier(q, vec2(-0.8, 0.4 + sway), vec2(-0.05, 0.66), vec2(0.8, 0.5 - sway));
+  float left = sdBezier(q, vec2(-0.3, 0.52), vec2(-0.26, -0.12), vec2(-0.56, -0.64));
+  float right = sdBezier(q, vec2(0.3, 0.52), vec2(0.2, -0.4), vec2(0.6, -0.58));
+  float stroke = min(bar, min(left, right)) - (0.09 + 0.012 * sin(t * 1.3));
+  // Extrude, with rounded edges.
+  vec2 w = vec2(stroke, abs(p.z) - 0.1);
+  return min(max(w.x, w.y), 0.0) + length(max(w, 0.0)) - 0.04;
+}
 `
 
-export type FormName = "cells" | "gyroid" | "knot" | "harmonic" | "bulb"
+export type FormName = "cells" | "gyroid" | "knot" | "harmonic" | "bulb" | "pi"
 
 export interface FormInfo {
   /** Body of `float sdf(vec3 p)`. */
@@ -132,6 +180,7 @@ export const FORMS: Record<FormName, FormInfo> = {
   knot: { sdf: "return fKnot(p, uSeed);", accent: "#22589c", label: "Torus knot" },
   harmonic: { sdf: "return fHarmonic(p, uSeed);", accent: "#5c3c96", label: "Radiolarian" },
   bulb: { sdf: "return fBulb(p, uSeed);", accent: "#1e3a96", label: "Mandelbulb" },
+  pi: { sdf: "return fPi(p, uSeed);", accent: "#2f5fa6", label: "Pi" },
 }
 
 export const FORM_NAMES = Object.keys(FORMS) as FormName[]
