@@ -8,6 +8,8 @@ import {
 } from "@harasyn/engine"
 import { STUDIO_CSS } from "./styles"
 
+export { devLooksStore } from "./store"
+
 /** Named scenes, and which one the app uses. */
 export interface Looks {
   active: string | null
@@ -30,6 +32,8 @@ export interface StudioOptions {
   shareLinks?: boolean
   /** Start folded (defaults to folded on small screens). */
   folded?: boolean
+  /** The page starts out showing the active look (true on the site itself). */
+  showsActiveLook?: boolean
 }
 
 export interface Studio {
@@ -74,7 +78,15 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     return node
   }
   const refreshers: (() => void)[] = []
-  const section = (title: string, ...rows: Node[]) => el("section", {}, [el("h2", { textContent: title }), ...rows])
+  // Sections fold when their heading is clicked; `closed` ones start folded.
+  const section = (title: string, ...rows: Node[]) => {
+    const heading = el("h2", { textContent: title, title: "Show or hide" })
+    const body = el("div", { className: "hs-body" }, rows)
+    const sec = el("section", {}, [heading, body])
+    heading.addEventListener("click", () => sec.classList.toggle("hs-closed"))
+    return sec
+  }
+  const closed = (sec: HTMLElement) => { sec.classList.add("hs-closed"); return sec }
   const row = (...children: Node[]) => el("div", { className: "hs-row" }, children)
 
   function segmented<T extends string>(values: readonly T[], label: (v: T) => string, get: () => T, pick: (v: T) => void) {
@@ -169,7 +181,8 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   let looks: Looks = { active: null, looks: {} }
   let loaded: string | null = null
   const lookList = el("div", { className: "hs-looks" })
-  const lookName = el("input", { type: "text", placeholder: "look name", spellcheck: false })
+  const lookName = el("input", { type: "text", placeholder: "name, e.g. ember-ascii", spellcheck: false })
+  const lookHint = el("p")
   function renderLooks() {
     lookList.replaceChildren(...Object.keys(looks.looks).sort().map((name) => {
       const live = looks.active === name
@@ -181,12 +194,12 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
         flash(`loaded ${name}`)
       })
       open.title = "Load this look"
-      const use = button(live ? "live" : "use", async () => {
+      const use = button(live ? "site default" : "set default", async () => {
         looks = await options.looks!.setActive(name)
         renderLooks()
-        flash(`the site now uses ${name}`)
+        flash(`${name} is now the site's default`)
       })
-      use.title = live ? "The site uses this look" : "Make the site use this look"
+      use.title = live ? "The site uses this look" : "Make this the site's default look"
       if (live) { use.classList.add("hs-live"); use.disabled = true }
       const del = button("×", async () => {
         looks = await options.looks!.remove(name)
@@ -199,6 +212,7 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       return el("div", { className: "hs-look" }, [open, use, del])
     }))
     if (!Object.keys(looks.looks).length) lookList.append(el("p", { textContent: "No saved looks yet." }))
+    lookHint.textContent = looks.active ? `Site default: ${looks.active}. Click a look to load it.` : "No site default yet."
   }
   async function saveLook(makeActive: boolean) {
     const name = lookName.value.trim()
@@ -206,13 +220,14 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     looks = await options.looks!.save(name, scene(), makeActive)
     loaded = name
     renderLooks()
-    flash(makeActive ? `saved ${name}; the site now uses it` : `saved ${name}`)
+    flash(makeActive ? `saved ${name}; it's now the site's default` : `saved ${name}`)
   }
   const looksSection = options.looks
     ? section("Looks",
+      lookHint,
       lookList,
       row(lookName),
-      row(button("Save", () => saveLook(false)), button("Save & use on site", () => saveLook(true))),
+      row(button("Save", () => saveLook(false)), button("Save & set as site default", () => saveLook(true))),
     )
     : null
 
@@ -226,41 +241,8 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     title,
     stats,
     problems,
+    row(note),
     ...(looksSection ? [looksSection] : []),
-    section("Form",
-      segmented(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),
-      row(button("Scatter", () => field.scatter()), button("Gather", () => field.gather())),
-    ),
-    section("Math",
-      segmented(CURVE_NAMES, (c) => CURVES[c].label, currentCurve, (curve) => {
-        // Plane plots read best face-on.
-        set({ camera: { yaw: 0, pitch: 0, spin: 0 }, motion: { autoplay: null } })
-        field.morph({ type: "curve", curve })
-      }),
-    ),
-    section("Motion",
-      segmented(["direct", "reservoir"] as const, (v) => (v === "direct" ? "Slide" : "Via reservoir"), () => scene().motion.via, (via) => set({ motion: { via } })),
-      segmented(["on", "off"] as const, (v) => (v === "on" ? "Autoplay" : "Hold"), () => (scene().motion.autoplay ? "on" : "off"), (v) => {
-        // Turning autoplay back on restores the rotation it had, e.g. with text in it.
-        const current = scene().motion.autoplay
-        if (current) lastAutoplay = current
-        set({ motion: { autoplay: v === "on" ? lastAutoplay : null } })
-      }),
-      slider("Gather s", 0.5, 10, 0.1, () => scene().motion.gather, (gather) => set({ motion: { gather } })),
-      slider("Scatter s", 0.5, 10, 0.1, () => scene().motion.scatter, (scatter) => set({ motion: { scatter } })),
-    ),
-    section("Reservoir",
-      segmented(["band", "field", "none"] as const, (v) => ({ band: "Band", field: "Anywhere", none: "Off" })[v], () => scene().reservoir.mode, (mode) => set({ reservoir: { mode } })),
-      slider("Height", 0.02, 0.4, 0.01, () => scene().reservoir.height, (height) => set({ reservoir: { height } })),
-      slider("Opacity", 0, 1, 0.05, () => scene().reservoir.opacity, (opacity) => set({ reservoir: { opacity } })),
-      slider("Drift", 0, 0.3, 0.01, () => scene().reservoir.drift, (drift) => set({ reservoir: { drift } })),
-      slider("Reserve", 0, 0.5, 0.01, () => scene().motion.reserve, (reserve) => set({ motion: { reserve } })),
-    ),
-    section("Camera",
-      segmented(["perspective", "isometric"] as const, (v) => (v === "perspective" ? "Perspective" : "Isometric"), () => scene().camera.projection, (projection) => set({ camera: { projection } })),
-      slider("Spin °/s", -30, 30, 0.5, () => scene().camera.spin, (spin) => set({ camera: { spin } })),
-      slider("Zoom", 0.5, 2, 0.05, () => scene().camera.zoom, (zoom) => set({ camera: { zoom } })),
-    ),
     section("Style",
       segmented(["dots", "squares", "streaks", "ascii"] as const, (v) => ({ dots: "Dots", squares: "Squares", streaks: "Streaks", ascii: "ASCII" })[v],
         () => scene().style.kind, (kind) => set({ style: { kind } })),
@@ -279,13 +261,47 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       slider("Cell px", 4, 24, 1, () => scene().style.ascii.cell, (cell) => set({ style: { ascii: { cell } } })),
       slider("Contrast", 0.2, 3, 0.1, () => scene().style.ascii.contrast, (contrast) => set({ style: { ascii: { contrast } } })),
     ),
-    section("Particles",
+    section("Reservoir",
+      segmented(["band", "field", "none"] as const, (v) => ({ band: "Band", field: "Anywhere", none: "Off" })[v], () => scene().reservoir.mode, (mode) => set({ reservoir: { mode } })),
+      slider("Height", 0.02, 0.4, 0.01, () => scene().reservoir.height, (height) => set({ reservoir: { height } })),
+      slider("Opacity", 0, 1, 0.05, () => scene().reservoir.opacity, (opacity) => set({ reservoir: { opacity } })),
+      slider("Drift", 0, 0.3, 0.01, () => scene().reservoir.drift, (drift) => set({ reservoir: { drift } })),
+      slider("Reserve", 0, 0.5, 0.01, () => scene().motion.reserve, (reserve) => set({ motion: { reserve } })),
+    ),
+    section("Camera",
+      segmented(["perspective", "isometric"] as const, (v) => (v === "perspective" ? "Perspective" : "Isometric"), () => scene().camera.projection, (projection) => set({ camera: { projection } })),
+      slider("Spin °/s", -30, 30, 0.5, () => scene().camera.spin, (spin) => set({ camera: { spin } })),
+      slider("Zoom", 0.5, 2, 0.05, () => scene().camera.zoom, (zoom) => set({ camera: { zoom } })),
+    ),
+    section("Motion",
+      segmented(["direct", "reservoir"] as const, (v) => (v === "direct" ? "Slide" : "Via reservoir"), () => scene().motion.via, (via) => set({ motion: { via } })),
+      segmented(["on", "off"] as const, (v) => (v === "on" ? "Autoplay" : "Hold"), () => (scene().motion.autoplay ? "on" : "off"), (v) => {
+        // Turning autoplay back on restores the rotation it had, e.g. with text in it.
+        const current = scene().motion.autoplay
+        if (current) lastAutoplay = current
+        set({ motion: { autoplay: v === "on" ? lastAutoplay : null } })
+      }),
+      slider("Gather s", 0.5, 10, 0.1, () => scene().motion.gather, (gather) => set({ motion: { gather } })),
+      slider("Scatter s", 0.5, 10, 0.1, () => scene().motion.scatter, (scatter) => set({ motion: { scatter } })),
+    ),
+    section("Form",
+      segmented(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),
+      row(button("Scatter", () => field.scatter()), button("Gather", () => field.gather())),
+    ),
+    closed(section("Math",
+      segmented(CURVE_NAMES, (c) => CURVES[c].label, currentCurve, (curve) => {
+        // Plane plots read best face-on.
+        set({ camera: { yaw: 0, pitch: 0, spin: 0 }, motion: { autoplay: null } })
+        field.morph({ type: "curve", curve })
+      }),
+    )),
+    closed(section("Particles",
       segmented(["auto", "16384", "65536", "147456", "262144"] as const,
         (v) => (v === "auto" ? "Auto" : `${Math.round(Number(v) / 1024)}k`),
         () => String(scene().particles.count) as "auto",
         (v) => set({ particles: { count: v === "auto" ? "auto" : Number(v) } })),
-    ),
-    section("Scene JSON", json, jsonTools, row(note)),
+    )),
+    closed(section("Scene JSON", json, jsonTools)),
   )
   document.body.append(panel)
 
@@ -299,9 +315,10 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   if (options.looks) {
     void attempt(async () => {
       looks = await options.looks!.load()
-      // The page starts out showing the live look.
-      loaded = looks.active
-      if (loaded) lookName.value = loaded
+      if (options.showsActiveLook && looks.active) {
+        loaded = looks.active
+        lookName.value = loaded
+      }
       renderLooks()
     })
   }

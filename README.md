@@ -34,15 +34,16 @@ The live version is set in `apps/site/site.config.ts`.
 ## Styling the site (studio)
 
 v2 reads its look from `apps/site/src/versions/v2/looks.json`: named scenes,
-plus which one is active. To change it:
+plus which one is the site's default. Change it from either place:
 
-```sh
-SITE_VERSION=v2 npm run dev    # then press ⌥⇧S, or open /?studio
-```
+- **Playground** (`npm run dev -w @harasyn/playground`): style freely, then in
+  **Looks** type a name and **Save**, or **Save & set as site default**. Looks
+  save into the site version named by `studioVersion` in
+  `apps/site/site.config.ts`.
+- **The site itself** (`SITE_VERSION=v2 npm run dev`, then ⌥⇧S or `/?studio`):
+  the same panel over the real page.
 
-Tune the look, then **Save** it under a name, or **Save & use on site** to make
-it the active look. Load earlier looks from the list, or press **use** to make
-one active. Saving writes `looks.json`; commit and push to publish. The studio
-and its save endpoint exist only in `npm run dev`, never in a build, so
-visitors can't reach them. The site as it was
-before the monorepo is tagged `archive/site-v1`.
+Click a saved look to load it; **set default** makes it the site's default.
+Saving writes `looks.json` (a running site dev server reloads with it); commit
+and push to publish. The studio and its save endpoint exist only in dev
+servers, never in a build, so visitors can't reach them.

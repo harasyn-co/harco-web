@@ -15,8 +15,11 @@ export const STUDIO_CSS = /* css */ `
 .hs-studio h1::after { content: " −"; color: var(--hs-dim); }
 .hs-studio.hs-folded h1::after { content: " +"; }
 .hs-studio.hs-folded > :not(h1):not(.hs-stats) { display: none; }
-.hs-studio h2 { margin: 14px 0 6px; font-size: 11px; font-weight: 500; color: var(--hs-dim); letter-spacing: 0.06em; text-transform: uppercase; }
-.hs-studio p { margin: 0; color: var(--hs-dim); }
+.hs-studio h2 { cursor: pointer; user-select: none; margin: 14px 0 6px; font-size: 11px; font-weight: 500; color: var(--hs-dim); letter-spacing: 0.06em; text-transform: uppercase; }
+.hs-studio h2::after { content: " −"; }
+.hs-studio .hs-closed h2::after { content: " +"; }
+.hs-studio .hs-closed .hs-body { display: none; }
+.hs-studio p { margin: 0 0 4px; color: var(--hs-dim); }
 .hs-studio .hs-stats { font-variant-numeric: tabular-nums; }
 .hs-studio .hs-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; align-items: center; }
 .hs-studio button { color: var(--hs-fg); background: transparent; border: 1px solid var(--hs-line); border-radius: 0; padding: 3px 8px; cursor: pointer; }
