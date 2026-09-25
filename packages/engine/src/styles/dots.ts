@@ -1,7 +1,8 @@
 // Dots: each particle is a soft round point. Particles riding the form are
-// lit by its surface normal in v1's palette: a grey-brown body, shadows
+// lit by its surface normal in v1's palette: a grey-brown body, crevices
 // sinking to violet-black, and blue rims. The far side of the form is faint,
 // so the form reads as a solid made of grain. Loose particles are warm grey.
+// Colours roll off softly towards white instead of clipping.
 export const DOTS_VERT = /* glsl */ `#version 300 es
 precision highp float;
 
@@ -48,18 +49,22 @@ void main() {
   float fre = pow(1.0 - clamp(facing, 0.0, 1.0), 3.0);
   float spec = pow(max(dot(reflect(-viewDir, n), L), 0.0), 28.0);
   float below = max(-n.y, 0.0);
+  float ao = clamp(N.w, 0.0, 1.0);
+  float lit = dif * (0.45 + 0.55 * ao);
 
-  vec3 col = mix(uBody, uMid, smoothstep(0.0, 0.6, dif));
-  col = mix(col, uLight, smoothstep(0.45, 1.0, dif) * 0.8);
-  col *= (0.6 + 0.9 * dif) * 1.55;
-  col = mix(col, uShadow, (1.0 - dif) * 0.35);
-  col += mix(uRim, uAccent, 0.6) * fre * 0.9;
-  col += uAccent * below * 0.25;
-  col += uLight * spec * 0.3;
+  vec3 col = mix(uBody, uMid, smoothstep(0.0, 0.6, lit));
+  col = mix(col, uLight, smoothstep(0.45, 1.0, lit) * 0.8);
+  col *= (0.55 + 1.0 * lit + 0.25 * ao) * 1.5;
+  col = mix(col, uShadow, (1.0 - ao) * 0.75);
+  col += mix(uRim, uAccent, 0.6) * fre * 0.9 * ao;
+  col += uAccent * below * 0.25 * ao;
+  col += uLight * spec * 0.3 * ao;
+  // Soft shoulder: keeps highlights from clipping to flat white.
+  col = 1.0 - exp(-col * 1.25);
 
   // The side facing away shows faintly through.
   float front = smoothstep(-0.2, 0.35, facing);
-  float formAlpha = mix(0.1, 0.95, front);
+  float formAlpha = mix(0.1, 0.95, front) * mix(0.55, 1.0, ao);
   if (persp) formAlpha *= mix(0.55, 1.0, smoothstep(-1.2, 0.6, world.z));
 
   // Loose grain: warm grey with a trace of the accent, faded as it rests.

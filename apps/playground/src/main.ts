@@ -5,9 +5,11 @@ const panel = document.getElementById("panel")!
 
 let field: Field
 try {
+  // ?reduced forces reduced motion, to preview it without changing system settings.
+  const params = new URLSearchParams(location.search)
   field = createField(canvas, {
     motion: { autoplay: { forms: FORM_NAMES, hold: 12 } },
-  })
+  }, { reducedMotion: params.has("reduced") ? true : undefined })
 } catch (err) {
   panel.innerHTML = `<h1>Engine playground</h1><p class="error">${(err as Error).message}</p>`
   throw err
@@ -122,5 +124,5 @@ refresh()
 setInterval(() => {
   const s = field.stats()
   const v = field.getView()
-  stats.textContent = `${s.particles.toLocaleString()} particles · ${s.fps} fps · yaw ${v.yaw.toFixed(0)}° pitch ${v.pitch.toFixed(0)}°`
+  stats.textContent = `${s.particles.toLocaleString()} particles · ${s.fps} fps · quality ${s.quality}${s.reducedMotion ? " · reduced motion" : ""} · yaw ${v.yaw.toFixed(0)}° pitch ${v.pitch.toFixed(0)}°`
 }, 500)

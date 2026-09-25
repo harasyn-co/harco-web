@@ -34,6 +34,7 @@ uniform vec2 uView;          // half width, half height (world units at z = 0)
 uniform vec2 uCamera;        // camera distance, 1 = perspective
 uniform vec4 uReservoir;     // mode, height (share of the view), opacity, drift
 uniform float uCapture;      // distance at which a particle in flight latches on
+uniform float uSnap;         // 1 = jump straight to where each particle belongs
 uniform float uReset;        // 1 = put every particle at home
 
 layout(location = 0) out vec4 outPos;
@@ -115,7 +116,12 @@ void main() {
   vec3 to = target - pos;
   float dist = length(to);
 
-  if (wants && attach > 0.5 && dist < 0.6) {
+  if (uSnap > 0.5) {
+    // No travel: on the form if wanted, otherwise at home.
+    pos = wants ? target : h.p;
+    vel = vec3(0.0);
+    attach = wants ? 1.0 : 0.0;
+  } else if (wants && attach > 0.5 && dist < 0.6) {
     // Riding the surface: stay on the anchor as it moves.
     vel = to / max(dt, 1e-3);
     pos = target;

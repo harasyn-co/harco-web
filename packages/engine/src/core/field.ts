@@ -23,16 +23,40 @@ const RESEED_CHANGE_TIME = 1.5
 // Pause in the reservoir between letting go of one form and gathering the next.
 const RESERVOIR_PAUSE = 0.8
 const START_DELAY = 0.6
+// Adaptive quality: sample this long, and step down if frames run slower
+// than this. Each level caps the pixel ratio and, for "auto" counts, scales
+// the particle texture's side.
+const QUALITY_WINDOW = 2
+const SLOW_FPS = 42
+const QUALITY = [
+  { dprCap: 2, sideScale: 1 },
+  { dprCap: 1.5, sideScale: 1 },
+  { dprCap: 1, sideScale: 1 },
+  { dprCap: 1, sideScale: 0.75 },
+  { dprCap: 1, sideScale: 0.55 },
+]
+// After a particle count change, particles jump into place for this long.
+const SNAP_TIME = 0.6
+// The frozen moment shown with reduced motion.
+const STILL_TIME = 10
 // Drag: degrees per CSS px, and how fast the spin from a flick dies away.
 const DRAG_YAW = 0.35
 const DRAG_PITCH = 0.25
 const FLICK_DECAY = 2.5
 
-export type FieldEvent = "source" | "error"
+export type FieldEvent = "source" | "quality" | "contextlost" | "contextrestored"
 
 export interface FieldStats {
   fps: number
   particles: number
+  /** 0 is full quality; each step down lowers resolution or particle count. */
+  quality: number
+  reducedMotion: boolean
+}
+
+export interface FieldOptions {
+  /** Hold still and change instantly. Defaults to the system setting. */
+  reducedMotion?: boolean
 }
 
 export interface Field {
@@ -69,8 +93,8 @@ function autoSide() {
   return small || coarse ? 256 : 384
 }
 
-function sideFor(count: Scene["particles"]["count"]) {
-  return count === "auto" ? autoSide() : clamp(Math.round(Math.sqrt(count)), 16, 1024)
+function sideFor(count: Scene["particles"]["count"], sideScale: number) {
+  return count === "auto" ? Math.round(autoSide() * sideScale) : clamp(Math.round(Math.sqrt(count)), 16, 1024)
 }
 
 function sdfBody(source: Exclude<SourceSpec, { type: "curve" }>) {
@@ -90,43 +114,67 @@ function curveParts(source: Extract<SourceSpec, { type: "curve" }>) {
   return { glsl, length: source.length ?? preset?.length ?? 2 * Math.PI, duration: source.duration ?? preset?.duration ?? 10 }
 }
 
-export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {}): Field {
+const UPDATE_UNIFORMS = [
+  "uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir",
+  "uView", "uCamera", "uReservoir", "uCapture", "uSnap", "uReset",
+] as const
+const DOTS_UNIFORMS = [
+  "uPos", "uVel", "uNormal", "uModel", "uProj", "uPointSize", "uOpacity", "uSide",
+  "uShadow", "uBody", "uMid", "uLight", "uRim", "uAccent", "uLoose",
+] as const
+
+export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {}, options: FieldOptions = {}): Field {
   const gl = canvas.getContext("webgl2", { alpha: false, antialias: false })
   if (!gl) throw new UnsupportedError("WebGL2 is not available")
   if (!gl.getExtension("EXT_color_buffer_float")) throw new UnsupportedError("Float render targets are not available")
 
   let scene = applyPatch(DEFAULT_SCENE, initial)
   const listeners = new Map<FieldEvent, Set<(detail: unknown) => void>>()
-  const emit = (event: FieldEvent, detail: unknown) => listeners.get(event)?.forEach((l) => l(detail))
+  const emit = (event: FieldEvent, detail?: unknown) => listeners.get(event)?.forEach((l) => l(detail))
 
-  const update = compile(gl, FULLSCREEN_VERT, UPDATE_FRAG)
-  const uu = uniforms(gl, update, ["uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir", "uView", "uCamera", "uReservoir", "uCapture", "uReset"] as const)
-  const dots = compile(gl, DOTS_VERT, DOTS_FRAG)
-  const du = uniforms(gl, dots, [
-    "uPos", "uNormal", "uModel", "uProj", "uPointSize", "uOpacity", "uSide",
-    "uShadow", "uBody", "uMid", "uLight", "uRim", "uAccent", "uLoose", "uVel",
-  ] as const)
-  const vao = gl.createVertexArray()
+  // Reduced motion follows the system setting unless the app decides.
+  const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)")
+  let reduced = options.reducedMotion ?? !!motionQuery?.matches
+  const onMotionPref = () => { if (options.reducedMotion === undefined) reduced = !!motionQuery?.matches }
+  motionQuery?.addEventListener?.("change", onMotionPref)
 
-  // Particle and anchor state, sized together.
+  // GPU resources. Everything here is rebuilt if the context is lost.
+  let update: WebGLProgram
+  let uu: ReturnType<typeof uniforms<(typeof UPDATE_UNIFORMS)[number]>>
+  let dots: WebGLProgram
+  let du: ReturnType<typeof uniforms<(typeof DOTS_UNIFORMS)[number]>>
+  let vao: WebGLVertexArrayObject
+  const programs = new Map<string, SdfProgram | CurveProgram>()
   let side = 0
   let particles: PingPong | null = null
   let anchors: PingPong | null = null
   let resetParticles = true
   let resetAnchors = true
+  let quality = 0
+  let snapUntil = -1
+
+  function buildPrograms() {
+    update = compile(gl!, FULLSCREEN_VERT, UPDATE_FRAG)
+    uu = uniforms(gl!, update, UPDATE_UNIFORMS)
+    dots = compile(gl!, DOTS_VERT, DOTS_FRAG)
+    du = uniforms(gl!, dots, DOTS_UNIFORMS)
+    vao = gl!.createVertexArray()
+  }
+
+  // Particle and anchor state, sized together.
   function allocate() {
     particles?.dispose()
     anchors?.dispose()
-    side = sideFor(scene.particles.count)
+    side = sideFor(scene.particles.count, QUALITY[quality].sideScale)
     particles = new PingPong(gl!, side, 2)
     anchors = new PingPong(gl!, side, 2)
     resetParticles = true
     resetAnchors = true
   }
+  buildPrograms()
   allocate()
 
   // Compiled source programs, by kind and code.
-  const programs = new Map<string, SdfProgram | CurveProgram>()
   function programFor(source: SourceSpec): SdfProgram | CurveProgram {
     if (source.type === "curve") {
       const { glsl, length, duration } = curveParts(source)
@@ -182,10 +230,10 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     dir = 1
   }
 
-  function morph(source: SourceSpec, options: { via?: Via } = {}) {
+  function morph(source: SourceSpec, morphOptions: { via?: Via } = {}) {
     const program = programFor(source) // throws on bad GLSL before anything changes
     const seed = source.seed ?? randomSeed()
-    const via = options.via ?? scene.motion.via
+    const via = reduced ? "direct" : morphOptions.via ?? scene.motion.via
     if (via === "direct" || presence < 0.02) {
       pending = null
       if (via === "reservoir") resetAnchors = true
@@ -236,7 +284,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     const cssW = canvas.clientWidth
     const cssH = canvas.clientHeight
     if (!cssW || !cssH) return
-    dpr = Math.min(window.devicePixelRatio || 1, 2)
+    dpr = Math.min(window.devicePixelRatio || 1, QUALITY[quality].dprCap)
     width = Math.round(cssW * dpr)
     height = Math.round(cssH * dpr)
     canvas.width = width
@@ -286,9 +334,61 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     if (source) morph(source)
   }
 
+  // Context loss: stop drawing, and rebuild everything when it comes back.
+  let lost = false
+  function onLost(e: Event) {
+    e.preventDefault()
+    lost = true
+    emit("contextlost")
+  }
+  function onRestored() {
+    // Extensions are lost with the context, so float targets need re-enabling.
+    if (!gl!.getExtension("EXT_color_buffer_float")) return
+    programs.clear()
+    particles = anchors = null
+    buildPrograms()
+    allocate()
+    current = { ...current, program: programFor(scene.source) }
+    if (pending) pending = { ...pending, program: programFor(pending.source) }
+    snapUntil = t + SNAP_TIME
+    lost = false
+    emit("contextrestored")
+  }
+  canvas.addEventListener("webglcontextlost", onLost)
+  canvas.addEventListener("webglcontextrestored", onRestored)
+
+  // Adaptive quality: step down when frames stay slow. Only "auto" particle
+  // counts are reduced; a count the scene asked for is kept.
+  const frameTimes: number[] = []
+  let windowStart = 0
+  function checkQuality(now: number, frameMs: number) {
+    if (frameMs < 250) frameTimes.push(frameMs) // ignore pauses such as hidden tabs
+    if (now - windowStart < QUALITY_WINDOW * 1000) return
+    windowStart = now
+    if (frameTimes.length < 20) { frameTimes.length = 0; return }
+    const sorted = [...frameTimes].sort((a, b) => a - b)
+    frameTimes.length = 0
+    const medianFps = 1000 / sorted[sorted.length >> 1]
+    let next = quality
+    while (next < QUALITY.length - 1) {
+      next++
+      const level = QUALITY[next]
+      const helpsDpr = level.dprCap < Math.min(window.devicePixelRatio || 1, QUALITY[quality].dprCap)
+      const helpsCount = scene.particles.count === "auto" && level.sideScale < QUALITY[quality].sideScale
+      if (helpsDpr || helpsCount) break
+    }
+    if (medianFps >= SLOW_FPS || next === quality) return
+    const recount = QUALITY[next].sideScale !== QUALITY[quality].sideScale && scene.particles.count === "auto"
+    quality = next
+    resize()
+    if (recount) { allocate(); snapUntil = t + SNAP_TIME }
+    emit("quality", quality)
+  }
+
   // Frame loop.
   let raf = 0
   let lastT = 0
+  let lastNow = 0
   let fps = 60
 
   function step(now: number) {
@@ -297,7 +397,12 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     const dt = Math.min(0.05, Math.max(0.001, t - lastT))
     if (lastT) fps += (1 / Math.max(dt, 1e-3) - fps) * 0.05
     lastT = t
-    if (!width || !particles || !anchors) return
+    if (lastNow && !reduced) checkQuality(now, now - lastNow)
+    lastNow = now
+    if (lost || !width || !particles || !anchors) return
+    // Reduced motion: a frozen moment, and every change lands at once.
+    const snap = reduced || t < snapUntil
+    const clock = reduced ? STILL_TIME : t
 
     if (!started && t >= START_DELAY) { started = true; gather(); scheduleAuto() }
 
@@ -317,7 +422,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     }
 
     // Autoplay picks another form once the current one has held long enough.
-    const auto = scene.motion.autoplay
+    const auto = reduced ? null : scene.motion.autoplay
     if (auto && t >= nextAuto && !pending) {
       const options = auto.forms.filter((f) => !(scene.source.type === "shape" && scene.source.form === f))
       if (options.length) morph({ type: "shape", form: options[Math.floor(Math.random() * options.length)] })
@@ -326,9 +431,9 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
 
     // Rotation.
     if (!drag) {
-      view.yaw += (scene.camera.spin + view.yawVel) * dt
+      view.yaw += ((reduced ? 0 : scene.camera.spin) + view.yawVel) * dt
       view.pitch = clamp(view.pitch + view.pitchVel * dt, -85, 85)
-      const decay = Math.exp(-dt * FLICK_DECAY)
+      const decay = reduced ? 0 : Math.exp(-dt * FLICK_DECAY)
       view.yawVel *= decay
       view.pitchVel *= decay
     }
@@ -344,9 +449,9 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, anchors.write.fb)
     gl!.useProgram(sp.program)
     bindTextures(gl!, 0, [[sp.u.uAnchor, anchors.read.textures[0]]])
-    gl!.uniform1f(sp.u.uTime, t)
+    gl!.uniform1f(sp.u.uTime, clock)
     gl!.uniform1f(sp.u.uDt, dt)
-    gl!.uniform1f(sp.u.uAge, t - current.since)
+    gl!.uniform1f(sp.u.uAge, reduced ? 1e4 : t - current.since)
     gl!.uniform4fv(sp.u.uSeed, current.seed)
     gl!.uniform1f(sp.u.uReseed, t < reseedUntil ? RESEED_CHANGE : RESEED_REST)
     gl!.uniform1f(sp.u.uReset, resetAnchors ? 1 : 0)
@@ -364,9 +469,9 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
       [uu.uAnchor, anchors.read.textures[0]],
     ])
     gl!.uniformMatrix3fv(uu.uModel, false, model)
-    gl!.uniform1f(uu.uTime, t)
+    gl!.uniform1f(uu.uTime, clock)
     gl!.uniform1f(uu.uDt, dt)
-    gl!.uniform1f(uu.uPresence, presence)
+    gl!.uniform1f(uu.uPresence, reduced ? presenceTarget : presence)
     gl!.uniform1f(uu.uReserve, clamp(scene.motion.reserve, 0, 1))
     gl!.uniform1f(uu.uDir, dir)
     gl!.uniform2f(uu.uCamera, proj[2], proj[3])
@@ -374,6 +479,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     const r = scene.reservoir
     gl!.uniform4f(uu.uReservoir, RESERVOIR_MODES[r.mode] ?? 1, clamp(r.height, 0, 1), clamp(r.opacity, 0, 1), r.drift)
     gl!.uniform1f(uu.uCapture, "range" in sp ? 0.3 : 0.02)
+    gl!.uniform1f(uu.uSnap, snap ? 1 : 0)
     gl!.uniform1f(uu.uReset, resetParticles ? 1 : 0)
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     particles.swap()
@@ -417,7 +523,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     scatter,
     gather,
     getView: () => ({ yaw: ((view.yaw % 360) + 360) % 360, pitch: view.pitch }),
-    stats: () => ({ fps: Math.round(fps), particles: side * side }),
+    stats: () => ({ fps: Math.round(fps), particles: side * side, quality, reducedMotion: reduced }),
     debug() {
       const read = (target: { fb: WebGLFramebuffer }, attachment: number) => {
         const out = new Float32Array(side * side * 4)
@@ -447,6 +553,9 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     dispose() {
       cancelAnimationFrame(raf)
       observer.disconnect()
+      motionQuery?.removeEventListener?.("change", onMotionPref)
+      canvas.removeEventListener("webglcontextlost", onLost)
+      canvas.removeEventListener("webglcontextrestored", onRestored)
       canvas.removeEventListener("pointerdown", onDown)
       canvas.removeEventListener("pointermove", onMove)
       canvas.removeEventListener("pointerup", onUp)
