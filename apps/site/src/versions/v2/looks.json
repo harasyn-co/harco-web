@@ -38,8 +38,7 @@
             "cells",
             "gyroid",
             "knot",
-            "harmonic",
-            "chladni"
+            "harmonic"
           ],
           "hold": 12
         }

@@ -15,7 +15,6 @@ const PHRASES: Record<FormName, string> = {
   gyroid: "optimizing hardware",
   knot: "optimizing hardware",
   harmonic: "building agentic interaction models",
-  chladni: "building agentic interaction models",
 }
 const phraseFor = (source: SourceSpec) => (source.type === "shape" ? PHRASES[source.form] : PHRASES.cells)
 
