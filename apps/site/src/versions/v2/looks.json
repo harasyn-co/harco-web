@@ -1,5 +1,5 @@
 {
-  "active": "playground",
+  "active": "site",
   "looks": {
     "playground": {
       "source": {
@@ -56,6 +56,74 @@
         "via": "direct",
         "autoplay": {
           "forms": [
+            "cells",
+            "gyroid",
+            "knot",
+            "harmonic"
+          ],
+          "hold": 12
+        }
+      }
+    },
+    "site": {
+      "source": {
+        "type": "text",
+        "text": "in experimentation mode"
+      },
+      "style": {
+        "kind": "dots",
+        "size": 1.5,
+        "opacity": 1,
+        "palette": {
+          "background": "#020203",
+          "shadow": "#1a1626",
+          "body": "#584840",
+          "mid": "#887a70",
+          "light": "#c0b6aa",
+          "rim": "#305c96",
+          "accent": "form",
+          "loose": "#ccc7bf"
+        },
+        "streaks": {
+          "length": 0.06
+        },
+        "ascii": {
+          "cell": 10,
+          "chars": " .:-=+*#%@",
+          "grid": true,
+          "color": "shade",
+          "contrast": 1,
+          "font": "\"IBM Plex Mono\", ui-monospace, Menlo, monospace"
+        }
+      },
+      "camera": {
+        "projection": "perspective",
+        "yaw": 0,
+        "pitch": 15,
+        "spin": 4.5,
+        "zoom": 1,
+        "drag": true
+      },
+      "particles": {
+        "count": "auto"
+      },
+      "reservoir": {
+        "mode": "band",
+        "height": 0.12,
+        "opacity": 0.55,
+        "drift": 0.05
+      },
+      "motion": {
+        "gather": 3,
+        "scatter": 2.5,
+        "reserve": 0.12,
+        "via": "direct",
+        "autoplay": {
+          "forms": [
+            {
+              "type": "text",
+              "text": "in experimentation mode"
+            },
             "cells",
             "gyroid",
             "knot",
