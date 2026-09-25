@@ -4,11 +4,12 @@ Monorepo for harasyn.co and the particle engine behind it.
 
 ```
 apps/site/         harasyn.co (React + Vite). Deploys to GitHub Pages on push to main.
-apps/playground/   The engine on its own, with every setting as a control.
+apps/studio/       Harco Studio (studio.harasyn.co): the engine with every setting
+                   as a control, for exploring designs and saving looks to the site.
 packages/engine/   @harasyn/engine: particles that gather into shapes, harmonics,
                    math, images and UI. Framework-free, with a thin React wrapper.
-packages/studio/   @harasyn/studio: the control panel used by the playground and,
-                   in development only, by the site.
+packages/panel/    @harasyn/panel: the control panel used by the studio and, in
+                   development only, by the site.
 ```
 
 ## Commands
@@ -31,19 +32,26 @@ SITE_VERSION=v0 npm run dev
 
 The live version is set in `apps/site/site.config.ts`.
 
-## Styling the site (studio)
+## Harco Studio
 
-v2 reads its look from `apps/site/src/versions/v2/looks.json`: named scenes,
-plus which one is the site's default. Change it from either place:
+The studio is the engine with every setting as a control. Run it locally with
+`npm run dev -w @harasyn/studio`, or use the hosted copy at studio.harasyn.co.
 
-- **Playground** (`npm run dev -w @harasyn/playground`): style freely, then in
-  **Looks** type a name and **Save**, or **Save & set as site default**. Looks
-  save into the site version named by `studioVersion` in
-  `apps/site/site.config.ts`.
-- **The site itself** (`SITE_VERSION=v2 npm run dev`, then ⌥⇧S or `/?studio`):
-  the same panel over the real page.
+- **Looks:** style freely, then save under a name. **Site looks** are the
+  site's (`apps/site/src/versions/<studioVersion>/looks.json`, with
+  `studioVersion` in `apps/site/site.config.ts`); **Save & set as site
+  default** makes one the site's look. **My looks** stay in the browser.
+- **Saving to the site:** locally, saves go through the dev server into the
+  repo (commit them yourself). Hosted, saves commit to `main`, which
+  redeploys harasyn.co; they need the **owner key**, a GitHub token that can
+  write to this repo, entered once in the studio and kept in that browser.
+- **Access:** the hosted studio is published encrypted. Visitors need the
+  **access key** (the `STUDIO_ACCESS_KEY` secret) to open it; without it
+  there's only a key prompt.
+- **Deploys:** `.github/workflows/studio.yml` builds the studio, seals it
+  with the access key, and publishes it to the `harasyn-co/studio` repo,
+  which serves studio.harasyn.co.
 
-Click a saved look to load it; **set default** makes it the site's default.
-Saving writes `looks.json` (a running site dev server reloads with it); commit
-and push to publish. The studio and its save endpoint exist only in dev
-servers, never in a build, so visitors can't reach them.
+The site itself also opens the panel in development
+(`SITE_VERSION=v2 npm run dev`, then ⌥⇧S or `/?studio`). Neither the panel nor
+its save endpoint is ever part of the site's build.

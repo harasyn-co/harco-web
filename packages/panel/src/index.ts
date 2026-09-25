@@ -1,4 +1,4 @@
-// @harasyn/studio: a control panel for an engine field. Every scene setting
+// @harasyn/panel: a control panel for an engine field. Every scene setting
 // as a control, the scene as editable JSON, and (given a store) saved looks:
 // named scenes that can be loaded, saved, and set as the one an app uses.
 // Meant for development; apps should keep it out of production builds.
@@ -9,6 +9,7 @@ import {
 import { STUDIO_CSS } from "./styles"
 
 export { devLooksStore } from "./store"
+export { browserLooksStore, checkGitHubToken, githubLooksStore } from "./stores"
 
 /** Named scenes, and which one the app uses. */
 export interface Looks {
@@ -24,15 +25,33 @@ export interface LooksStore {
   remove(name: string): Promise<Looks>
 }
 
+/** A named set of looks shown in the panel. */
+export interface LooksLibrary {
+  title: string
+  store: LooksStore
+  /** A site's looks: one is the site's default. */
+  site?: boolean
+  /** Saving, deleting and setting the default are allowed. */
+  canSave?: boolean
+  /** Shown in place of the save controls when saving isn't allowed. */
+  readOnlyNote?: string
+  /** The page starts out showing this library's default look. */
+  showsActiveLook?: boolean
+}
+
 export interface StudioOptions {
   title?: string
-  /** Saved looks. Without a store the Looks section is hidden. */
+  /** Saved looks: shorthand for one site library that can save. */
   looks?: LooksStore
+  /** Libraries of looks, shown in order. */
+  libraries?: LooksLibrary[]
+  /** Extra sections placed at the top of the panel. */
+  sections?: Node[]
   /** Offer "Copy link", which puts the scene in the URL hash. */
   shareLinks?: boolean
   /** Start folded (defaults to folded on small screens). */
   folded?: boolean
-  /** The page starts out showing the active look (true on the site itself). */
+  /** With `looks`: the page starts out showing the active look (true on the site itself). */
   showsActiveLook?: boolean
 }
 
@@ -162,7 +181,9 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   }
   // Copies only the type settings into the site's default look.
   async function saveTypeToSite() {
-    const store = options.looks!
+    const lib = libraries.find((l) => l.site && l.canSave)
+    if (!lib) throw new Error("Saving to the site isn't available here")
+    const store = lib.store
     const current = await store.load()
     const name = current.active
     if (!name || !current.looks[name]) throw new Error("There's no site default look to save into yet")
@@ -171,8 +192,8 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     if (!type) throw new Error("This page is running older engine code with no type settings. Reload it and try again.")
     const look = structuredClone(current.looks[name]) as ScenePatch
     look.style = { ...look.style, type }
-    looks = await store.save(name, look as Scene, true)
-    renderLooks()
+    await store.save(name, look as Scene, true)
+    await reloadLibraries()
     flash(`type saved to ${name}, the site's default`)
   }
 
@@ -206,59 +227,82 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     }),
   )
 
-  // Looks: saved scenes, with the one the app uses marked live.
-  let looks: Looks = { active: null, looks: {} }
-  let loaded: string | null = null
-  const lookList = el("div", { className: "hs-looks" })
-  const lookName = el("input", { type: "text", placeholder: "name, e.g. ember-ascii", spellcheck: false })
-  const lookHint = el("p")
-  function renderLooks() {
-    lookList.replaceChildren(...Object.keys(looks.looks).sort().map((name) => {
-      const live = looks.active === name
-      const open = button(`${name === loaded ? "▸ " : ""}${name}`, () => {
-        applyScene(looks.looks[name])
-        loaded = name
-        lookName.value = name
-        renderLooks()
-        flash(`loaded ${name}`)
-      })
-      open.title = "Load this look"
-      const use = button(live ? "site default" : "set default", async () => {
-        looks = await options.looks!.setActive(name)
-        renderLooks()
-        flash(`${name} is now the site's default`)
-      })
-      use.title = live ? "The site uses this look" : "Make this the site's default look"
-      if (live) { use.classList.add("hs-live"); use.disabled = true }
-      const del = button("×", async () => {
-        looks = await options.looks!.remove(name)
-        if (loaded === name) loaded = null
-        renderLooks()
-        flash(`deleted ${name}`)
-      })
-      del.title = "Delete this look"
-      if (live) del.disabled = true
-      return el("div", { className: "hs-look" }, [open, use, del])
-    }))
-    if (!Object.keys(looks.looks).length) lookList.append(el("p", { textContent: "No saved looks yet." }))
-    lookHint.textContent = looks.active ? `Site default: ${looks.active}. Click a look to load it.` : "No site default yet."
+  // Libraries of looks. A site library marks its default look and can make
+  // any look the default; each library shows save controls only if it can save.
+  const libraries: LooksLibrary[] = options.libraries ?? (options.looks
+    ? [{ title: "Looks", store: options.looks, site: true, canSave: true, showsActiveLook: options.showsActiveLook }]
+    : [])
+  const reloaders: (() => Promise<void>)[] = []
+  const reloadLibraries = async () => { for (const r of reloaders) await r() }
+
+  function librarySection(lib: LooksLibrary) {
+    let looks: Looks = { active: null, looks: {} }
+    let loaded: string | null = null
+    const list = el("div", { className: "hs-looks" })
+    const name = el("input", { type: "text", placeholder: "name, e.g. ember-ascii", spellcheck: false })
+    const hint = el("p")
+    function render() {
+      list.replaceChildren(...Object.keys(looks.looks).sort().map((n) => {
+        const open = button(`${n === loaded ? "▸ " : ""}${n}`, () => {
+          applyScene(looks.looks[n])
+          loaded = n
+          name.value = n
+          render()
+          flash(`loaded ${n}`)
+        })
+        open.title = "Load this look"
+        const controls: HTMLButtonElement[] = [open]
+        const live = lib.site && looks.active === n
+        if (lib.site && (lib.canSave || live)) {
+          const use = button(live ? "site default" : "set default", async () => {
+            looks = await lib.store.setActive(n)
+            render()
+            flash(`${n} is now the site's default`)
+          })
+          use.title = live ? "The site uses this look" : "Make this the site's default look"
+          if (live) { use.classList.add("hs-live"); use.disabled = true }
+          controls.push(use)
+        }
+        if (lib.canSave) {
+          const del = button("×", async () => {
+            looks = await lib.store.remove(n)
+            if (loaded === n) loaded = null
+            render()
+            flash(`deleted ${n}`)
+          })
+          del.title = "Delete this look"
+          if (live) del.disabled = true
+          controls.push(del)
+        }
+        return el("div", { className: "hs-look" }, controls)
+      }))
+      if (!Object.keys(looks.looks).length) list.append(el("p", { textContent: "No saved looks yet." }))
+      hint.textContent = lib.site
+        ? looks.active ? `Site default: ${looks.active}. Click a look to load it.` : "No site default yet."
+        : "Click a look to load it."
+    }
+    async function save(makeActive: boolean) {
+      const n = name.value.trim()
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(n)) throw new Error("Look names use lowercase letters, numbers and dashes, e.g. ember-ascii")
+      looks = await lib.store.save(n, scene(), makeActive)
+      loaded = n
+      render()
+      flash(makeActive ? `saved ${n}; it's now the site's default` : `saved ${n}`)
+    }
+    reloaders.push(async () => { looks = await lib.store.load(); render() })
+    void attempt(async () => {
+      looks = await lib.store.load()
+      if (lib.showsActiveLook && looks.active) {
+        loaded = looks.active
+        name.value = loaded
+      }
+      render()
+    })
+    const saving = lib.canSave
+      ? [row(name), row(button("Save", () => save(false)), ...(lib.site ? [button("Save & set as site default", () => save(true))] : []))]
+      : lib.readOnlyNote ? [el("p", { textContent: lib.readOnlyNote })] : []
+    return section(lib.title, hint, list, ...saving)
   }
-  async function saveLook(makeActive: boolean) {
-    const name = lookName.value.trim()
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new Error("Look names use lowercase letters, numbers and dashes, e.g. ember-ascii")
-    looks = await options.looks!.save(name, scene(), makeActive)
-    loaded = name
-    renderLooks()
-    flash(makeActive ? `saved ${name}; it's now the site's default` : `saved ${name}`)
-  }
-  const looksSection = options.looks
-    ? section("Looks",
-      lookHint,
-      lookList,
-      row(lookName),
-      row(button("Save", () => saveLook(false)), button("Save & set as site default", () => saveLook(true))),
-    )
-    : null
 
   const stats = el("p", { className: "hs-stats" })
   const title = el("h1", { textContent: options.title ?? "Studio", title: "Show or hide the controls" })
@@ -271,7 +315,8 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
     stats,
     problems,
     row(note),
-    ...(looksSection ? [looksSection] : []),
+    ...(options.sections ?? []),
+    ...libraries.map(librarySection),
     section("Style",
       segmented(["dots", "squares", "streaks", "ascii"] as const, (v) => ({ dots: "Dots", squares: "Squares", streaks: "Streaks", ascii: "ASCII" })[v],
         () => scene().style.kind, (kind) => set({ style: { kind } })),
@@ -321,7 +366,7 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
       slider("Density", 0.005, 0.3, 0.005, () => scene().style.type.density, (density) => setType({ density })),
       slider("Speed", 2, 40, 1, () => scene().style.type.speed, (speed) => setType({ speed })),
       slider("Width", 0.6, 4, 0.1, () => scene().style.type.width, (width) => setType({ width })),
-      ...(options.looks ? [row(button("Save type to site default", saveTypeToSite))] : []),
+      ...(libraries.some((l) => l.site && l.canSave) ? [row(button("Save type to site default", saveTypeToSite))] : []),
     ),
     section("Form",
       segmented(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),
@@ -351,17 +396,6 @@ export function mountStudio(field: Field, options: StudioOptions = {}): Studio {
   }
   const offSource = field.on("source", () => refresh())
   refresh()
-  if (options.looks) {
-    void attempt(async () => {
-      looks = await options.looks!.load()
-      if (options.showsActiveLook && looks.active) {
-        loaded = looks.active
-        lookName.value = loaded
-      }
-      renderLooks()
-    })
-  }
-
   const timer = setInterval(() => {
     if (panel.hidden) return
     const s = field.stats()

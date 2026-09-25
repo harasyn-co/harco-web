@@ -77,7 +77,7 @@ sources, so text can sit in the rotation:
 GLSL that fails to compile throws from `morph`/`set` and leaves the current
 source in place.
 
-## Playground
+## Studio
 
-`npm run dev -w @harasyn/playground` opens every setting as a control, plus
-the scene as editable JSON. "Copy link" puts the scene in the URL.
+`npm run dev -w @harasyn/studio` opens every setting as a control, plus the
+scene as editable JSON. "Copy link" puts the scene in the URL.
