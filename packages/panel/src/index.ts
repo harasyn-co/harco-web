@@ -9,7 +9,7 @@ import {
 import { STUDIO_CSS } from "./styles"
 
 export { devLooksStore } from "./store"
-export { browserLooksStore, checkGitHubToken, githubLooksStore } from "./stores"
+export { browserLooksStore, checkGitHubToken, cleanToken, githubLooksStore } from "./stores"
 
 /** Named scenes, and which one the app uses. */
 export interface Looks {

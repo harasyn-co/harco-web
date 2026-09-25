@@ -7,7 +7,7 @@
 //   keep looks in their own browser.
 import { createField, FORM_NAMES, type Field } from "@harasyn/engine"
 import {
-  browserLooksStore, checkGitHubToken, devLooksStore, githubLooksStore, mountStudio, sceneFromHash, type LooksLibrary,
+  browserLooksStore, checkGitHubToken, cleanToken, devLooksStore, githubLooksStore, mountStudio, sceneFromHash, type LooksLibrary,
 } from "@harasyn/panel"
 
 // Where the site keeps its looks (set in vite.config.ts from the site's config).
@@ -65,17 +65,20 @@ if (!import.meta.env.DEV) {
     note.textContent = `A GitHub token that can write to ${SITE.repo} unlocks saving to ${SITE.url}.`
     const input = Object.assign(document.createElement("input"), { type: "password", placeholder: "github_pat_…", autocomplete: "off" })
     const unlock = Object.assign(document.createElement("button"), { type: "button", textContent: "Unlock saving" })
-    unlock.addEventListener("click", async () => {
-      note.textContent = "Checking…"
+    const tryUnlock = async () => {
+      note.textContent = "Checking the key with GitHub…"
       try {
-        const login = await checkGitHubToken(SITE.repo, input.value.trim())
-        localStorage.setItem(OWNER_KEY, input.value.trim())
+        const token = cleanToken(input.value)
+        const login = await checkGitHubToken(SITE.repo, token, SITE.path, SITE.branch)
+        localStorage.setItem(OWNER_KEY, token)
         note.textContent = `Unlocked for ${login}.`
         location.reload()
       } catch (err) {
         note.textContent = (err as Error).message
       }
-    })
+    }
+    unlock.addEventListener("click", () => void tryUnlock())
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void tryUnlock() } })
     row.append(input, unlock)
   }
   body.append(note, row)
