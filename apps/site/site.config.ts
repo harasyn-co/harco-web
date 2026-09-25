@@ -10,3 +10,10 @@
  *   SITE_VERSION=v1 npm run dev
  */
 export const liveVersion = "v1"
+
+/**
+ * The version whose looks the engine playground's studio saves to, so a look
+ * styled in the playground can become this version's default. Running the
+ * site itself in dev edits whichever version is running.
+ */
+export const studioVersion = "v2"
