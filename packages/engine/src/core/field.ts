@@ -4,7 +4,10 @@ import { applyPatch, DEFAULT_SCENE, ISOMETRIC_PITCH, type Scene, type ScenePatch
 import { FORMS, type FormName } from "../sources/forms"
 import { compileSdf, type SdfProgram } from "../sources/sdf"
 import { compileCurve, CURVES, type CurveProgram } from "../sources/curve"
-import { DOTS_FRAG, DOTS_VERT } from "../styles/dots"
+import { SHADING_UNIFORMS } from "../styles/shading"
+import { POINTS_FRAG, POINTS_VERT, SHAPE } from "../styles/points"
+import { STREAKS_FRAG, STREAKS_VERT } from "../styles/streaks"
+import { ASCII_FRAG, CELL_ASPECT, glyphAtlas } from "../styles/ascii"
 import { RESERVOIR_MODES, UPDATE_FRAG } from "./particles"
 import { bindTextures, compile, FULLSCREEN_VERT, PingPong, uniforms } from "./gl"
 import { clamp, DEG, hexToRgb, orbit } from "./math"
@@ -118,10 +121,9 @@ const UPDATE_UNIFORMS = [
   "uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir",
   "uView", "uCamera", "uReservoir", "uCapture", "uSnap", "uReset",
 ] as const
-const DOTS_UNIFORMS = [
-  "uPos", "uVel", "uNormal", "uModel", "uProj", "uPointSize", "uOpacity", "uSide",
-  "uShadow", "uBody", "uMid", "uLight", "uRim", "uAccent", "uLoose",
-] as const
+const POINTS_UNIFORMS = [...SHADING_UNIFORMS, "uPointSize", "uGlyphCount", "uGain", "uShape", "uAtlas", "uStride"] as const
+const STREAKS_UNIFORMS = [...SHADING_UNIFORMS, "uTrail"] as const
+const ASCII_UNIFORMS = ["uGrid", "uAtlas", "uGlyphCount", "uCell", "uGain", "uBackground", "uInk"] as const
 
 export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {}, options: FieldOptions = {}): Field {
   const gl = canvas.getContext("webgl2", { alpha: false, antialias: false })
@@ -141,9 +143,16 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   // GPU resources. Everything here is rebuilt if the context is lost.
   let update: WebGLProgram
   let uu: ReturnType<typeof uniforms<(typeof UPDATE_UNIFORMS)[number]>>
-  let dots: WebGLProgram
-  let du: ReturnType<typeof uniforms<(typeof DOTS_UNIFORMS)[number]>>
+  let points: WebGLProgram
+  let pu: ReturnType<typeof uniforms<(typeof POINTS_UNIFORMS)[number]>>
+  let streaks: WebGLProgram
+  let su: ReturnType<typeof uniforms<(typeof STREAKS_UNIFORMS)[number]>>
+  let ascii: WebGLProgram
+  let au: ReturnType<typeof uniforms<(typeof ASCII_UNIFORMS)[number]>>
   let vao: WebGLVertexArrayObject
+  // ASCII: a character atlas, and a low-resolution grid to gather into.
+  let atlas: { tex: WebGLTexture; key: string; count: number } | null = null
+  let grid: { tex: WebGLTexture; fb: WebGLFramebuffer; w: number; h: number } | null = null
   const programs = new Map<string, SdfProgram | CurveProgram>()
   let side = 0
   let particles: PingPong | null = null
@@ -156,9 +165,46 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   function buildPrograms() {
     update = compile(gl!, FULLSCREEN_VERT, UPDATE_FRAG)
     uu = uniforms(gl!, update, UPDATE_UNIFORMS)
-    dots = compile(gl!, DOTS_VERT, DOTS_FRAG)
-    du = uniforms(gl!, dots, DOTS_UNIFORMS)
+    points = compile(gl!, POINTS_VERT, POINTS_FRAG)
+    pu = uniforms(gl!, points, POINTS_UNIFORMS)
+    streaks = compile(gl!, STREAKS_VERT, STREAKS_FRAG)
+    su = uniforms(gl!, streaks, STREAKS_UNIFORMS)
+    ascii = compile(gl!, FULLSCREEN_VERT, ASCII_FRAG)
+    au = uniforms(gl!, ascii, ASCII_UNIFORMS)
     vao = gl!.createVertexArray()
+    atlas = null
+    grid = null
+  }
+
+  function ensureAtlas() {
+    const { chars, font } = scene.style.ascii
+    const key = `${chars}\u0000${font}`
+    if (atlas?.key === key) return atlas
+    if (atlas) gl!.deleteTexture(atlas.tex)
+    const tex = gl!.createTexture()
+    gl!.bindTexture(gl!.TEXTURE_2D, tex)
+    gl!.texImage2D(gl!.TEXTURE_2D, 0, gl!.RGBA, gl!.RGBA, gl!.UNSIGNED_BYTE, glyphAtlas(chars || " ", font))
+    gl!.generateMipmap(gl!.TEXTURE_2D)
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, gl!.LINEAR_MIPMAP_LINEAR)
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_S, gl!.CLAMP_TO_EDGE)
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE)
+    atlas = { tex, key, count: Math.max(1, [...chars].length) }
+    return atlas
+  }
+
+  function ensureGrid(w: number, h: number) {
+    if (grid && grid.w === w && grid.h === h) return grid
+    if (grid) { gl!.deleteTexture(grid.tex); gl!.deleteFramebuffer(grid.fb) }
+    const tex = gl!.createTexture()
+    gl!.bindTexture(gl!.TEXTURE_2D, tex)
+    gl!.texStorage2D(gl!.TEXTURE_2D, 1, gl!.RGBA16F, w, h)
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, gl!.NEAREST)
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MAG_FILTER, gl!.NEAREST)
+    const fb = gl!.createFramebuffer()
+    gl!.bindFramebuffer(gl!.FRAMEBUFFER, fb)
+    gl!.framebufferTexture2D(gl!.FRAMEBUFFER, gl!.COLOR_ATTACHMENT0, gl!.TEXTURE_2D, tex, 0)
+    grid = { tex, fb, w, h }
+    return grid
   }
 
   // Particle and anchor state, sized together.
@@ -485,32 +531,92 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     particles.swap()
     resetParticles = false
 
-    // 3. Draw.
+    // 3. Draw, in the scene's style.
+    const st = scene.style
+    type ShadingU = Record<(typeof SHADING_UNIFORMS)[number], WebGLUniformLocation | null>
+    const shading = (u: ShadingU) => {
+      bindTextures(gl!, 0, [
+        [u.uPos, particles!.read.textures[0]],
+        [u.uVel, particles!.read.textures[1]],
+        [u.uNormal, anchors!.read.textures[1]],
+      ])
+      gl!.uniformMatrix3fv(u.uModel, false, model)
+      gl!.uniform4fv(u.uProj, proj)
+      gl!.uniform1f(u.uOpacity, st.opacity)
+      gl!.uniform1i(u.uSide, side)
+      gl!.uniform3fv(u.uShadow, colors.shadow)
+      gl!.uniform3fv(u.uBody, colors.body)
+      gl!.uniform3fv(u.uMid, colors.mid)
+      gl!.uniform3fv(u.uLight, colors.light)
+      gl!.uniform3fv(u.uRim, colors.rim)
+      gl!.uniform3fv(u.uAccent, accent)
+      gl!.uniform3fv(u.uLoose, colors.loose)
+    }
+    const drawPoints = (shape: number, size: number, gain: number, stride = 1) => {
+      gl!.useProgram(points)
+      shading(pu)
+      const a = shape === SHAPE.glyph ? ensureAtlas() : null
+      if (a) bindTextures(gl!, 3, [[pu.uAtlas, a.tex]])
+      gl!.uniform1f(pu.uPointSize, size)
+      gl!.uniform1i(pu.uShape, shape)
+      gl!.uniform1f(pu.uGlyphCount, a?.count ?? 1)
+      gl!.uniform1f(pu.uGain, gain)
+      gl!.uniform1i(pu.uStride, stride)
+      gl!.drawArrays(gl!.POINTS, 0, Math.ceil((side * side) / stride))
+    }
+
+    if (st.kind === "ascii" && st.ascii.grid) {
+      // Gather particles into the character grid, then print it.
+      const cell = Math.max(2, st.ascii.cell) * dpr
+      const g = ensureGrid(Math.ceil(width / (cell * CELL_ASPECT)), Math.ceil(height / cell))
+      gl!.bindFramebuffer(gl!.FRAMEBUFFER, g.fb)
+      gl!.viewport(0, 0, g.w, g.h)
+      gl!.clearColor(0, 0, 0, 0)
+      gl!.clear(gl!.COLOR_BUFFER_BIT)
+      gl!.enable(gl!.BLEND)
+      gl!.blendFunc(gl!.ONE, gl!.ONE)
+      drawPoints(SHAPE.round, 1, 0)
+      gl!.disable(gl!.BLEND)
+
+      gl!.bindFramebuffer(gl!.FRAMEBUFFER, null)
+      gl!.viewport(0, 0, width, height)
+      gl!.useProgram(ascii)
+      const a = ensureAtlas()
+      bindTextures(gl!, 3, [[au.uGrid, g.tex], [au.uAtlas, a.tex]])
+      gl!.uniform1f(au.uGlyphCount, a.count)
+      gl!.uniform2f(au.uCell, width / g.w, height / g.h)
+      // Scale coverage by how many particles a cell would hold if they were
+      // spread over the whole view, so density reads the same at any count.
+      const perCell = (side * side) / (g.w * g.h)
+      gl!.uniform1f(au.uGain, (1.1 * st.ascii.contrast) / Math.max(perCell, 1e-3))
+      gl!.uniform3fv(au.uBackground, background)
+      const ink = st.ascii.color === "shade" ? null : hexToRgb(st.ascii.color)
+      gl!.uniform4f(au.uInk, ink?.[0] ?? 0, ink?.[1] ?? 0, ink?.[2] ?? 0, ink ? 1 : 0)
+      gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+      return
+    }
+
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, null)
     gl!.viewport(0, 0, width, height)
     gl!.clearColor(background[0], background[1], background[2], 1)
     gl!.clear(gl!.COLOR_BUFFER_BIT)
-    gl!.useProgram(dots)
-    bindTextures(gl!, 0, [
-      [du.uPos, particles.read.textures[0]],
-      [du.uVel, particles.read.textures[1]],
-      [du.uNormal, anchors.read.textures[1]],
-    ])
-    gl!.uniformMatrix3fv(du.uModel, false, model)
-    gl!.uniform4fv(du.uProj, proj)
-    gl!.uniform1f(du.uPointSize, scene.style.size * dpr)
-    gl!.uniform1f(du.uOpacity, scene.style.opacity)
-    gl!.uniform1i(du.uSide, side)
-    gl!.uniform3fv(du.uShadow, colors.shadow)
-    gl!.uniform3fv(du.uBody, colors.body)
-    gl!.uniform3fv(du.uMid, colors.mid)
-    gl!.uniform3fv(du.uLight, colors.light)
-    gl!.uniform3fv(du.uRim, colors.rim)
-    gl!.uniform3fv(du.uAccent, accent)
-    gl!.uniform3fv(du.uLoose, colors.loose)
     gl!.enable(gl!.BLEND)
     gl!.blendFunc(gl!.ONE, gl!.ONE_MINUS_SRC_ALPHA)
-    gl!.drawArrays(gl!.POINTS, 0, side * side)
+    if (st.kind === "ascii") {
+      // One character per particle: draw only about as many as fit on the
+      // form (roughly an eighth of the screen's cells), or they pile into mush.
+      const cell = Math.max(2, st.ascii.cell) * dpr
+      const cells = (width * height) / (cell * cell * CELL_ASPECT)
+      const stride = Math.max(1, Math.round((side * side) / (cells * 0.12)))
+      drawPoints(SHAPE.glyph, cell, 1.6 * st.ascii.contrast, stride)
+    }
+    else drawPoints(st.kind === "squares" ? SHAPE.square : SHAPE.round, st.size * dpr, 0)
+    if (st.kind === "streaks") {
+      gl!.useProgram(streaks)
+      shading(su)
+      gl!.uniform1f(su.uTrail, st.streaks.length)
+      gl!.drawArrays(gl!.LINES, 0, side * side * 2)
+    }
     gl!.disable(gl!.BLEND)
   }
   raf = requestAnimationFrame(step)
@@ -564,7 +670,9 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       anchors?.dispose()
       for (const p of programs.values()) gl!.deleteProgram(p.program)
       gl!.deleteProgram(update)
-      gl!.deleteProgram(dots)
+      for (const p of [points, streaks, ascii]) gl!.deleteProgram(p)
+      if (atlas) gl!.deleteTexture(atlas.tex)
+      if (grid) { gl!.deleteTexture(grid.tex); gl!.deleteFramebuffer(grid.fb) }
       gl!.deleteVertexArray(vao)
       listeners.clear()
     },

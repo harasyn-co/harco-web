@@ -43,12 +43,35 @@ export interface Palette {
 }
 
 export interface StyleSpec {
-  kind: "dots"
-  /** Particle diameter in CSS px. */
+  /**
+   * How each particle is drawn. "dots": soft round points. "squares": crisp
+   * square points. "streaks": short trails along each particle's motion.
+   * "ascii": characters (see `ascii`).
+   */
+  kind: "dots" | "squares" | "streaks" | "ascii"
+  /** Particle size in CSS px (dots, squares, streaks). */
   size: number
   /** Overall particle opacity, 0..1. */
   opacity: number
   palette: Palette
+  streaks: {
+    /** Seconds of motion each streak covers. */
+    length: number
+  }
+  ascii: {
+    /** Character cell size in CSS px. */
+    cell: number
+    /** Characters from empty to full; the first is usually a space. */
+    chars: string
+    /** true: one character per grid cell, like a terminal. false: one per particle. */
+    grid: boolean
+    /** "shade" uses each cell's shaded colour; a hex colour prints in one ink. */
+    color: string
+    /** How quickly cells fill up to the densest character. */
+    contrast: number
+    /** CSS font family for the characters. */
+    font: string
+  }
 }
 
 export interface CameraSpec {
@@ -111,11 +134,45 @@ export interface Scene {
 }
 
 export type ScenePatch = {
-  [K in keyof Scene]?: K extends "source" ? SourceSpec : Scene[K] extends object ? DeepPartial<Scene[K]> : Scene[K]
+  [K in keyof Scene]?: K extends "source"
+    ? SourceSpec
+    : K extends "style"
+      ? Omit<DeepPartial<StyleSpec>, "palette"> & { palette?: PaletteName | Partial<Palette> }
+      : Scene[K] extends object ? DeepPartial<Scene[K]> : Scene[K]
 }
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] ? T[K] : T[K] extends object | null ? DeepPartial<T[K]> : T[K] }
 
 export const ISOMETRIC_PITCH = 35.264
+
+/** Named palettes. "v1" is harasyn.co v1's look. */
+export const PALETTES = {
+  v1: {
+    background: "#020203", shadow: "#1a1626", body: "#584840", mid: "#887a70",
+    light: "#c0b6aa", rim: "#305c96", accent: "form", loose: "#ccc7bf",
+  },
+  mono: {
+    background: "#050505", shadow: "#101010", body: "#4a4a4a", mid: "#8c8c8c",
+    light: "#e6e6e6", rim: "#b0b0b0", accent: "#9a9a9a", loose: "#bdbdbd",
+  },
+  ember: {
+    background: "#070302", shadow: "#1c0806", body: "#6e2a12", mid: "#c0561c",
+    light: "#ffc27a", rim: "#ff7a2e", accent: "#ff5a1f", loose: "#e0a27a",
+  },
+  ocean: {
+    background: "#01040a", shadow: "#03101f", body: "#0f3d5c", mid: "#2a7fa8",
+    light: "#b8ecff", rim: "#39d0ff", accent: "#1fb5d6", loose: "#8fc6d9",
+  },
+  phosphor: {
+    background: "#010401", shadow: "#021006", body: "#0b4a1a", mid: "#1f9a3a",
+    light: "#b6ffb0", rim: "#4dff6a", accent: "#2bd94a", loose: "#6fcf7d",
+  },
+  paper: {
+    background: "#ece8e0", shadow: "#8a8378", body: "#3a3530", mid: "#221f1c",
+    light: "#0d0c0b", rim: "#5a5248", accent: "#7a5a3a", loose: "#6e675e",
+  },
+} satisfies Record<string, Palette>
+
+export type PaletteName = keyof typeof PALETTES
 
 /** harasyn.co v1's look. */
 export const DEFAULT_SCENE: Scene = {
@@ -124,15 +181,15 @@ export const DEFAULT_SCENE: Scene = {
     kind: "dots",
     size: 1.5,
     opacity: 1,
-    palette: {
-      background: "#020203",
-      shadow: "#1a1626",
-      body: "#584840",
-      mid: "#887a70",
-      light: "#c0b6aa",
-      rim: "#305c96",
-      accent: "form",
-      loose: "#ccc7bf",
+    palette: { ...PALETTES.v1 },
+    streaks: { length: 0.06 },
+    ascii: {
+      cell: 10,
+      chars: " .:-=+*#%@",
+      grid: true,
+      color: "shade",
+      contrast: 1,
+      font: '"IBM Plex Mono", ui-monospace, Menlo, monospace',
     },
   },
   camera: { projection: "perspective", yaw: 0, pitch: 15, spin: 4.5, zoom: 1, drag: true },
@@ -144,8 +201,16 @@ export const DEFAULT_SCENE: Scene = {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v)
 
-/** Returns a new scene with the patch applied. Sources are replaced whole. */
+/**
+ * Returns a new scene with the patch applied. Sources are replaced whole, and
+ * a palette given by name is swapped for that palette's colours.
+ */
 export function applyPatch(scene: Scene, patch: ScenePatch): Scene {
+  const named = patch.style?.palette
+  if (typeof named === "string") {
+    if (!(named in PALETTES)) throw new Error(`Unknown palette "${named}". Palettes: ${Object.keys(PALETTES).join(", ")}`)
+    patch = { ...patch, style: { ...patch.style, palette: { ...PALETTES[named] } } }
+  }
   const merge = (a: unknown, b: unknown): unknown => {
     if (!isObject(a) || !isObject(b)) return b === undefined ? a : b
     const out: Record<string, unknown> = { ...a }

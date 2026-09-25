@@ -1,4 +1,4 @@
-import { createField, CURVES, CURVE_NAMES, FORMS, FORM_NAMES, type CurveName, type Field, type FormName, type Scene, type ScenePatch } from "@harasyn/engine"
+import { createField, CURVES, CURVE_NAMES, FORMS, FORM_NAMES, PALETTES, type PaletteName, type CurveName, type Field, type FormName, type Scene, type ScenePatch } from "@harasyn/engine"
 
 const canvas = document.getElementById("field") as HTMLCanvasElement
 const panel = document.getElementById("panel")!
@@ -61,6 +61,10 @@ const refreshers: (() => void)[] = []
 const scene = () => field.getScene()
 const set = (patch: ScenePatch) => field.set(patch)
 const currentForm = () => { const s = scene().source; return s.type === "shape" ? s.form : ("" as FormName) }
+const currentPalette = () => {
+  const p = scene().style.palette
+  return ((Object.keys(PALETTES) as PaletteName[]).find((k) => PALETTES[k].background === p.background && PALETTES[k].body === p.body) ?? "") as PaletteName
+}
 const currentCurve = () => { const s = scene().source; return s.type === "curve" && s.curve ? s.curve : ("" as CurveName) }
 
 const json = el("pre", { className: "json" })
@@ -106,8 +110,22 @@ panel.append(
     slider("Zoom", 0.5, 2, 0.05, () => scene().camera.zoom, (zoom) => set({ camera: { zoom } })),
   ),
   section("Style",
+    segmented(["dots", "squares", "streaks", "ascii"] as const, (v) => ({ dots: "Dots", squares: "Squares", streaks: "Streaks", ascii: "ASCII" })[v],
+      () => scene().style.kind, (kind) => set({ style: { kind } })),
+    segmented(Object.keys(PALETTES) as PaletteName[], (v) => v, currentPalette, (palette) => set({ style: { palette } })),
     slider("Size px", 0.5, 4, 0.1, () => scene().style.size, (size) => set({ style: { size } })),
     slider("Opacity", 0.1, 1, 0.05, () => scene().style.opacity, (opacity) => set({ style: { opacity } })),
+    slider("Streak s", 0.01, 0.3, 0.01, () => scene().style.streaks.length, (length) => set({ style: { streaks: { length } } })),
+  ),
+  section("ASCII",
+    segmented(["grid", "free"] as const, (v) => (v === "grid" ? "Grid" : "Per particle"), () => (scene().style.ascii.grid ? "grid" : "free"),
+      (v) => set({ style: { kind: "ascii", ascii: { grid: v === "grid" } } })),
+    segmented([" .:-=+*#%@", " .·:;+=xX$&", " ░▒▓█", " 01", " ·•●"] as const, (v) => v.trim() || "·", () => scene().style.ascii.chars as " 01",
+      (chars) => set({ style: { kind: "ascii", ascii: { chars } } })),
+    segmented(["shade", "#d9d6ce", "#4dff6a", "#ffb347"] as const, (v) => (v === "shade" ? "Shaded" : v), () => scene().style.ascii.color as "shade",
+      (color) => set({ style: { kind: "ascii", ascii: { color } } })),
+    slider("Cell px", 4, 24, 1, () => scene().style.ascii.cell, (cell) => set({ style: { ascii: { cell } } })),
+    slider("Contrast", 0.2, 3, 0.1, () => scene().style.ascii.contrast, (contrast) => set({ style: { ascii: { contrast } } })),
   ),
   section("Particles",
     segmented(["auto", "16384", "65536", "147456", "262144"] as const,
