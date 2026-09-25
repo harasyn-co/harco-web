@@ -65,6 +65,21 @@ export interface ParticleSpec {
 
 export type Via = "direct" | "reservoir"
 
+/**
+ * Where idle particles wait. "band": a soft pool along the bottom. "field":
+ * faint dust across the whole view, so forms gather from anywhere. "none":
+ * out of sight; particles fade in as they come and out as they go.
+ */
+export interface ReservoirSpec {
+  mode: "band" | "field" | "none"
+  /** Height of the band as a share of the view, 0..1. */
+  height: number
+  /** How visible resting particles are, 0..1. */
+  opacity: number
+  /** How fast resting particles drift, world units per second. */
+  drift: number
+}
+
 export interface MotionSpec {
   /** Seconds for the form to gather out of the reservoir. */
   gather: number
@@ -83,6 +98,7 @@ export interface Scene {
   style: StyleSpec
   camera: CameraSpec
   particles: ParticleSpec
+  reservoir: ReservoirSpec
   motion: MotionSpec
 }
 
@@ -113,6 +129,7 @@ export const DEFAULT_SCENE: Scene = {
   },
   camera: { projection: "perspective", yaw: 0, pitch: 15, spin: 4.5, zoom: 1, drag: true },
   particles: { count: "auto" },
+  reservoir: { mode: "band", height: 0.12, opacity: 0.55, drift: 0.05 },
   motion: { gather: 3, scatter: 2.5, reserve: 0.12, via: "direct", autoplay: null },
 }
 

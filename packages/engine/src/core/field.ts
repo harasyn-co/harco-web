@@ -4,7 +4,7 @@ import { applyPatch, DEFAULT_SCENE, ISOMETRIC_PITCH, type Scene, type ScenePatch
 import { FORMS, type FormName } from "../sources/forms"
 import { compileSdf, type SdfProgram } from "../sources/sdf"
 import { DOTS_FRAG, DOTS_VERT } from "../styles/dots"
-import { UPDATE_FRAG } from "./particles"
+import { RESERVOIR_MODES, UPDATE_FRAG } from "./particles"
 import { bindTextures, compile, FULLSCREEN_VERT, PingPong, uniforms } from "./gl"
 import { clamp, DEG, hexToRgb, orbit } from "./math"
 
@@ -15,8 +15,6 @@ const MAX_SIZE = 960
 const SQUARE_UNITS = 2.6
 const CAMERA_DISTANCE = 3
 const PERSPECTIVE_PITCH = 15
-// The reservoir: a band along the bottom, as a share of the view's half height.
-const RESERVOIR = [0.02, 0.16] as const
 // Share of anchors re-seeded per second: at rest, and just after a change.
 const RESEED_REST = 0.006
 const RESEED_CHANGE = 0.35
@@ -52,7 +50,7 @@ export interface Field {
   getView(): { yaw: number; pitch: number }
   stats(): FieldStats
   /** Reads particle state back from the GPU (slow): how many are on the form, in flight, or at rest. */
-  debug(): { attached: number; flying: number; resting: number; validAnchors: number; band: number[]; looseY: number[] }
+  debug(): { attached: number; flying: number; resting: number; validAnchors: number }
   on(event: FieldEvent, listener: (detail: unknown) => void): () => void
   dispose(): void
 }
@@ -93,11 +91,11 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
   const emit = (event: FieldEvent, detail: unknown) => listeners.get(event)?.forEach((l) => l(detail))
 
   const update = compile(gl, FULLSCREEN_VERT, UPDATE_FRAG)
-  const uu = uniforms(gl, update, ["uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir", "uView", "uCamera", "uReset"] as const)
+  const uu = uniforms(gl, update, ["uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir", "uView", "uCamera", "uReservoir", "uReset"] as const)
   const dots = compile(gl, DOTS_VERT, DOTS_FRAG)
   const du = uniforms(gl, dots, [
     "uPos", "uNormal", "uModel", "uProj", "uPointSize", "uOpacity", "uSide",
-    "uShadow", "uBody", "uMid", "uLight", "uRim", "uAccent", "uLoose", "uView",
+    "uShadow", "uBody", "uMid", "uLight", "uRim", "uAccent", "uLoose", "uVel",
   ] as const)
   const vao = gl.createVertexArray()
 
@@ -218,7 +216,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
 
   // Layout, recomputed on resize and zoom.
   let width = 0, height = 0, dpr = 1
-  const viewVec = new Float32Array(4)
+  const viewVec = new Float32Array(2)
   const proj = new Float32Array(4)
   function resize() {
     const cssW = canvas.clientWidth
@@ -233,7 +231,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     const ppu = (square / SQUARE_UNITS) * scene.camera.zoom
     const halfW = cssW / 2 / ppu
     const halfH = cssH / 2 / ppu
-    viewVec.set([halfW, halfH, -halfH * (1 - RESERVOIR[0] * 2), -halfH * (1 - RESERVOIR[1] * 2)])
+    viewVec.set([halfW, halfH])
     proj.set([1 / halfW, 1 / halfH, CAMERA_DISTANCE, scene.camera.projection === "perspective" ? 1 : 0])
   }
   resize()
@@ -357,7 +355,9 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     gl!.uniform1f(uu.uReserve, clamp(scene.motion.reserve, 0, 1))
     gl!.uniform1f(uu.uDir, dir)
     gl!.uniform2f(uu.uCamera, proj[2], proj[3])
-    gl!.uniform4fv(uu.uView, viewVec)
+    gl!.uniform2f(uu.uView, viewVec[0], viewVec[1])
+    const r = scene.reservoir
+    gl!.uniform4f(uu.uReservoir, RESERVOIR_MODES[r.mode] ?? 1, clamp(r.height, 0, 1), clamp(r.opacity, 0, 1), r.drift)
     gl!.uniform1f(uu.uReset, resetParticles ? 1 : 0)
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
     particles.swap()
@@ -371,6 +371,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     gl!.useProgram(dots)
     bindTextures(gl!, 0, [
       [du.uPos, particles.read.textures[0]],
+      [du.uVel, particles.read.textures[1]],
       [du.uNormal, anchors.read.textures[1]],
     ])
     gl!.uniformMatrix3fv(du.uModel, false, model)
@@ -385,7 +386,6 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
     gl!.uniform3fv(du.uRim, colors.rim)
     gl!.uniform3fv(du.uAccent, accent)
     gl!.uniform3fv(du.uLoose, colors.loose)
-    gl!.uniform4fv(du.uView, viewVec)
     gl!.enable(gl!.BLEND)
     gl!.blendFunc(gl!.ONE, gl!.ONE_MINUS_SRC_ALPHA)
     gl!.drawArrays(gl!.POINTS, 0, side * side)
@@ -412,17 +412,16 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {})
         return out
       }
       const pos = read(particles!.read, 0)
+      const vel = read(particles!.read, 1)
       const anc = read(anchors!.read, 0)
       let attached = 0, resting = 0, validAnchors = 0
       for (let i = 0; i < side * side; i++) {
+        const speed = Math.hypot(vel[i * 4], vel[i * 4 + 1], vel[i * 4 + 2])
         if (pos[i * 4 + 3] > 0.5) attached++
-        else if (pos[i * 4 + 1] < viewVec[3] + 0.05) resting++
+        else if (speed < 0.35) resting++
         if (anc[i * 4 + 3] > 0.5) validAnchors++
       }
-      const looseY: number[] = []
-      for (let i = 0; i < side * side; i += 97) if (pos[i * 4 + 3] <= 0.5) looseY.push(Math.round(pos[i * 4 + 1] * 100) / 100)
-      looseY.sort((a, b) => a - b)
-      return { attached, flying: side * side - attached - resting, resting, validAnchors, band: [viewVec[2], viewVec[3]], looseY }
+      return { attached, flying: side * side - attached - resting, resting, validAnchors }
     },
     on(event, listener) {
       if (!listeners.has(event)) listeners.set(event, new Set())

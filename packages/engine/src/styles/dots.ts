@@ -6,6 +6,7 @@ export const DOTS_VERT = /* glsl */ `#version 300 es
 precision highp float;
 
 uniform sampler2D uPos;
+uniform sampler2D uVel;
 uniform sampler2D uNormal;
 uniform mat3 uModel;
 uniform vec4 uProj;         // x, y scale to clip space; camera distance; 1 = perspective
@@ -19,7 +20,6 @@ uniform vec3 uLight;
 uniform vec3 uRim;
 uniform vec3 uAccent;
 uniform vec3 uLoose;
-uniform vec4 uView;         // half width, half height, reservoir bottom, top
 
 out vec4 vColor;
 out float vSize;
@@ -28,6 +28,7 @@ void main() {
   ivec2 cell = ivec2(gl_VertexID % uSide, gl_VertexID / uSide);
   vec4 P = texelFetch(uPos, cell, 0);
   vec4 N = texelFetch(uNormal, cell, 0);
+  float vis = clamp(texelFetch(uVel, cell, 0).w - 1.0, 0.0, 1.0);
   vec3 world = P.xyz;
   float attach = P.w;
 
@@ -61,12 +62,12 @@ void main() {
   float formAlpha = mix(0.1, 0.95, front);
   if (persp) formAlpha *= mix(0.55, 1.0, smoothstep(-1.2, 0.6, world.z));
 
-  // Loose grain: warm grey with a trace of the accent; dimmer at rest.
+  // Loose grain: warm grey with a trace of the accent, faded as it rests.
   vec3 loose = mix(uLoose, uAccent * 2.2 + 0.1, 0.18);
-  float resting = smoothstep(uView.w + 0.15, uView.w - 0.05, world.y);
-  float looseAlpha = mix(0.55, 0.3, resting);
+  float looseAlpha = 0.6 * vis;
 
   float alpha = mix(looseAlpha, formAlpha, attach) * uOpacity;
+  if (alpha < 0.002) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); gl_PointSize = 0.0; }
   vColor = vec4(mix(loose, col, attach) * alpha, alpha);
 }
 `
