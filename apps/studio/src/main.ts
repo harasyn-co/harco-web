@@ -49,22 +49,20 @@ libraries.push({ title: "My looks (this browser)", store: browserLooksStore(), c
 // The owner key, hosted only: checked against GitHub, then kept in this browser.
 const sections: Node[] = []
 if (!import.meta.env.DEV) {
-  const box = document.createElement("section")
-  const heading = Object.assign(document.createElement("h2"), { textContent: "Owner key" })
-  const body = document.createElement("div")
-  body.className = "hs-body"
-  const note = document.createElement("p")
-  const row = document.createElement("div")
-  row.className = "hs-row"
+  const h = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Record<string, unknown> = {}) =>
+    Object.assign(document.createElement(tag), props) as HTMLElementTagNameMap[K]
+  const box = h("section", { className: "hs-group" })
+  const note = h("p", { className: "hs-hint" })
+  const row = h("div", { className: "hs-row" })
   if (ownerKey) {
     note.textContent = `Saving to ${SITE.url} is unlocked in this browser.`
-    const forget = Object.assign(document.createElement("button"), { type: "button", textContent: "Forget key" })
+    const forget = h("button", { type: "button", textContent: "Forget key" })
     forget.addEventListener("click", () => { localStorage.removeItem(OWNER_KEY); location.reload() })
     row.append(forget)
   } else {
     note.textContent = `A GitHub token that can write to ${SITE.repo} unlocks saving to ${SITE.url}.`
-    const input = Object.assign(document.createElement("input"), { type: "password", placeholder: "github_pat_…", autocomplete: "off" })
-    const unlock = Object.assign(document.createElement("button"), { type: "button", textContent: "Unlock saving" })
+    const input = h("input", { type: "password", placeholder: "github_pat_…", autocomplete: "off" })
+    const unlock = h("button", { type: "button", textContent: "Unlock saving" })
     const tryUnlock = async () => {
       note.textContent = "Checking the key with GitHub…"
       try {
@@ -81,11 +79,18 @@ if (!import.meta.env.DEV) {
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void tryUnlock() } })
     row.append(input, unlock)
   }
-  body.append(note, row)
-  heading.addEventListener("click", () => box.classList.toggle("hs-closed"))
-  if (ownerKey) box.classList.add("hs-closed")
-  box.append(heading, body)
+  box.append(h("h3", { textContent: "Owner key" }), note, row)
   sections.push(box)
 }
 
-mountStudio(field, { title: "Harco Studio", shareLinks: true, libraries, sections })
+// The HARCO wordmark, shown before "Studio" in the panel's head.
+const brand = document.createElement("span")
+brand.innerHTML = `<svg viewBox="0 0 851 100" role="img" aria-label="HARCO" fill="currentColor" fill-rule="evenodd"> <path d="M0 0H28V44H122V0H150V100H122V68H28V100H0Z" /> <path transform="translate(164 0)" d="M0 100V40A40 40 0 0 1 40 0H120A40 40 0 0 1 160 40V100H132V68H28V100ZM28 44V40A16 16 0 0 1 44 24H116A16 16 0 0 1 132 40V44Z" /> <path transform="translate(338 0)" d="M0 0H110A40 40 0 0 1 150 40V54A14 14 0 0 1 136 68H150V100H122V68H28V100H0ZM28 24H106A16 16 0 0 1 122 40V44H28Z" /> <path transform="translate(502 0)" d="M164.8 36A40 40 0 0 0 125 0H40A40 40 0 0 0 0 40V60A40 40 0 0 0 40 100H125A40 40 0 0 0 164.8 64H136.49A16 16 0 0 1 121 76H44A16 16 0 0 1 28 60V40A16 16 0 0 1 44 24H121A16 16 0 0 1 136.49 36Z" /> <path transform="translate(681 0)" d="M40 0H130A40 40 0 0 1 170 40V60A40 40 0 0 1 130 100H40A40 40 0 0 1 0 60V40A40 40 0 0 1 40 0ZM44 24H126A16 16 0 0 1 142 40V60A16 16 0 0 1 126 76H44A16 16 0 0 1 28 60V40A16 16 0 0 1 44 24Z" /> </svg>`
+
+mountStudio(field, {
+  title: "Studio",
+  shareLinks: true,
+  libraries,
+  sections,
+  brand: brand.firstElementChild!,
+})

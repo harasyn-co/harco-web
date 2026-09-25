@@ -1,4 +1,10 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/* The studio: the field fills the window; the panel floats over it. */
 :root { color-scheme: dark; }
-html, body { margin: 0; height: 100%; background: #0b0b0c; color: #d9d6ce; font: 12px/1.5 ui-monospace, "IBM Plex Mono", monospace; }
+html, body { margin: 0; height: 100%; background: #020203; color: #f4f3ee; font: 13px/1.45 "Geist Variable", ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
 #field { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-.error { position: fixed; top: 16px; left: 16px; color: #e08a7a; }
+
+.error { position: fixed; top: 90px; left: 20px; color: #f07a6e; }

@@ -69,6 +69,11 @@ export interface FieldStats {
 export interface FieldOptions {
   /** Hold still and change instantly. Defaults to the system setting. */
   reducedMotion?: boolean
+  /**
+   * Draw on a transparent background instead of the palette's, so whatever
+   * is behind the canvas shows through (e.g. a translucent card).
+   */
+  transparent?: boolean
 }
 
 export interface Field {
@@ -139,7 +144,8 @@ const STREAKS_UNIFORMS = [...SHADING_UNIFORMS, "uTrail"] as const
 const ASCII_UNIFORMS = ["uGrid", "uAtlas", "uGlyphCount", "uCell", "uGain", "uBackground", "uInk"] as const
 
 export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {}, options: FieldOptions = {}): Field {
-  const gl = canvas.getContext("webgl2", { alpha: false, antialias: false })
+  const transparent = !!options.transparent
+  const gl = canvas.getContext("webgl2", { alpha: transparent, premultipliedAlpha: true, antialias: false })
   if (!gl) throw new UnsupportedError("WebGL2 is not available")
   if (!gl.getExtension("EXT_color_buffer_float")) throw new UnsupportedError("Float render targets are not available")
 
@@ -662,7 +668,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       // spread over the whole view, so density reads the same at any count.
       const perCell = (side * side) / (g.w * g.h)
       gl!.uniform1f(au.uGain, (1.1 * st.ascii.contrast) / Math.max(perCell, 1e-3))
-      gl!.uniform3fv(au.uBackground, background)
+      gl!.uniform4f(au.uBackground, background[0], background[1], background[2], transparent ? 0 : 1)
       const ink = st.ascii.color === "shade" ? null : hexToRgb(st.ascii.color)
       gl!.uniform4f(au.uInk, ink?.[0] ?? 0, ink?.[1] ?? 0, ink?.[2] ?? 0, ink ? 1 : 0)
       gl!.drawArrays(gl!.TRIANGLES, 0, 3)
@@ -671,7 +677,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
 
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, null)
     gl!.viewport(0, 0, width, height)
-    gl!.clearColor(background[0], background[1], background[2], 1)
+    if (transparent) gl!.clearColor(0, 0, 0, 0)
+    else gl!.clearColor(background[0], background[1], background[2], 1)
     gl!.clear(gl!.COLOR_BUFFER_BIT)
     gl!.enable(gl!.BLEND)
     gl!.blendFunc(gl!.ONE, gl!.ONE_MINUS_SRC_ALPHA)

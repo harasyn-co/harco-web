@@ -32,7 +32,7 @@ uniform sampler2D uAtlas;
 uniform float uGlyphCount;
 uniform vec2 uCell;          // cell size, device px
 uniform float uGain;         // coverage to brightness
-uniform vec3 uBackground;
+uniform vec4 uBackground;     // rgb, a = 0 for a transparent background
 uniform vec4 uInk;           // rgb, a = 1 to use it instead of the cell's colour
 
 out vec4 fragColor;
@@ -42,7 +42,8 @@ void main() {
   vec2 cellPos = floor(frag / uCell);
   vec2 local = fract(frag / uCell);
   vec4 acc = texelFetch(uGrid, ivec2(cellPos), 0);
-  fragColor = vec4(uBackground, 1.0);
+  // Premultiplied: empty cells are the background, or nothing when transparent.
+  fragColor = vec4(uBackground.rgb * uBackground.a, uBackground.a);
   if (acc.a <= 1e-4) return;
   float b = 1.0 - exp(-dot(acc.rgb, vec3(0.3, 0.59, 0.11)) * uGain);
   float index = floor(b * (uGlyphCount - 1.0) + 0.5);
@@ -51,6 +52,7 @@ void main() {
   vec3 col = uInk.a > 0.5 ? uInk.rgb : acc.rgb / acc.a;
   // Fuller cells are brighter as well as denser.
   col = clamp(col * (0.55 + 0.9 * b), 0.0, 1.0);
-  fragColor = vec4(mix(uBackground, col, ink), 1.0);
+  float a = mix(uBackground.a, 1.0, ink);
+  fragColor = vec4(mix(uBackground.rgb * uBackground.a, col, ink), a);
 }
 `

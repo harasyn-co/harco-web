@@ -11,6 +11,8 @@
     "build:gated": "npm run build && node scripts/gate.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
     "@harasyn/engine": "*",
     "@harasyn/panel": "*"
   },
