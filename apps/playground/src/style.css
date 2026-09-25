@@ -21,3 +21,8 @@ button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 #panel h1::after { content: " −"; color: var(--dim); }
 #panel.folded h1::after { content: " +"; }
 #panel.folded > :not(h1):not(.stats) { display: none; }
+textarea.json { width: 100%; resize: vertical; background: #0e0e10; color: var(--fg); border: 1px solid var(--line); padding: 6px; font: 10.5px/1.45 ui-monospace, monospace; white-space: pre; }
+textarea.json:focus { outline: none; border-color: var(--dim); }
+.problems { margin: 4px 0; color: #e08a7a; font-size: 11px; white-space: pre-wrap; }
+.problems:empty { display: none; }
+.note { color: var(--dim); align-self: center; }

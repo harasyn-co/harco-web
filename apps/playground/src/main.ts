@@ -1,13 +1,31 @@
-import { createField, CURVES, CURVE_NAMES, FORMS, FORM_NAMES, PALETTES, type PaletteName, type CurveName, type Field, type FormName, type Scene, type ScenePatch } from "@harasyn/engine"
+import { createField, SCENE_SCHEMA, SceneError, CURVES, CURVE_NAMES, FORMS, FORM_NAMES, PALETTES, type PaletteName, type CurveName, type Field, type FormName, type Scene, type ScenePatch } from "@harasyn/engine"
 
 const canvas = document.getElementById("field") as HTMLCanvasElement
+
+// Scenes travel in the URL hash as base64url JSON.
+function encodeScene(scene: Scene) {
+  const bytes = new TextEncoder().encode(JSON.stringify(scene))
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+function readSharedScene(): ScenePatch | null {
+  const m = location.hash.match(/scene=([\w-]+)/)
+  if (!m) return null
+  try {
+    const b64 = m[1].replace(/-/g, "+").replace(/_/g, "/")
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))))
+  } catch {
+    return null
+  }
+}
 const panel = document.getElementById("panel")!
 
 let field: Field
 try {
   // ?reduced forces reduced motion, to preview it without changing system settings.
+  // #scene=... holds a shared scene (see "Copy link").
   const params = new URLSearchParams(location.search)
-  field = createField(canvas, {
+  const shared = readSharedScene()
+  field = createField(canvas, shared ?? {
     motion: { autoplay: { forms: FORM_NAMES, hold: 12 } },
   }, { reducedMotion: params.has("reduced") ? true : undefined })
 } catch (err) {
@@ -67,7 +85,44 @@ const currentPalette = () => {
 }
 const currentCurve = () => { const s = scene().source; return s.type === "curve" && s.curve ? s.curve : ("" as CurveName) }
 
-const json = el("pre", { className: "json" })
+// The scene as editable JSON. Apply validates it against the schema and
+// shows any problems; the source is only re-applied if it changed.
+const json = el("textarea", { className: "json", spellcheck: false, rows: 14 })
+const problems = el("pre", { className: "problems" })
+function applyJson() {
+  problems.textContent = ""
+  let patch: ScenePatch
+  try {
+    patch = JSON.parse(json.value)
+  } catch (err) {
+    problems.textContent = `Not valid JSON: ${(err as Error).message}`
+    return
+  }
+  if (patch.source && JSON.stringify(patch.source) === JSON.stringify(scene().source)) delete patch.source
+  try {
+    field.set(patch)
+    refresh(true)
+  } catch (err) {
+    problems.textContent = err instanceof SceneError ? err.problems.join("\n") : (err as Error).message
+  }
+}
+json.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); applyJson() }
+})
+const copied = el("span", { className: "note" })
+const jsonTools = el("div", { className: "row" }, [
+  button("Apply ⌘↵", applyJson),
+  button("Copy link", async () => {
+    location.hash = `scene=${encodeScene(scene())}`
+    try { await navigator.clipboard.writeText(location.href); copied.textContent = "copied" } catch { copied.textContent = "in the address bar" }
+    setTimeout(() => (copied.textContent = ""), 2000)
+  }),
+  button("Schema", () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(SCENE_SCHEMA, null, 2)], { type: "application/json" }))
+    window.open(url, "_blank")
+  }),
+  copied,
+])
 const stats = el("p", { className: "stats" })
 
 // Tap the title to fold the panel away, e.g. on a phone.
@@ -133,15 +188,17 @@ panel.append(
       () => String(scene().particles.count) as "auto",
       (v) => set({ particles: { count: v === "auto" ? "auto" : Number(v) } })),
   ),
-  section("Scene JSON", json),
+  section("Scene JSON", json, problems, jsonTools),
 )
 
-function refresh() {
+function refresh(force = false) {
   refreshers.forEach((r) => r())
   const s: Scene = scene()
-  json.textContent = JSON.stringify(s, null, 2)
+  // Leave the JSON alone while someone is editing it.
+  if (force || document.activeElement !== json) json.value = JSON.stringify(s, null, 2)
 }
 field.on("source", () => refresh())
+json.addEventListener("focus", () => (problems.textContent = ""))
 refresh()
 
 setInterval(() => {

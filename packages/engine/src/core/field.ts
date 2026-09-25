@@ -11,6 +11,7 @@ import { ASCII_FRAG, CELL_ASPECT, glyphAtlas } from "../styles/ascii"
 import { RESERVOIR_MODES, UPDATE_FRAG } from "./particles"
 import { bindTextures, compile, FULLSCREEN_VERT, PingPong, uniforms } from "./gl"
 import { clamp, DEG, hexToRgb, orbit } from "./math"
+import { SceneError, validateScene } from "../validate"
 
 // The form sits in a centred square of this size (CSS px), limited by the
 // viewport, with radius 1 spanning 1/2.6 of it (as in v1).
@@ -66,7 +67,7 @@ export interface Field {
   readonly canvas: HTMLCanvasElement
   /** A copy of the current scene. */
   getScene(): Scene
-  /** Apply part of a scene. Changing the source morphs to it. */
+  /** Apply part of a scene. Changing the source morphs to it. Throws a SceneError listing any problems, leaving the scene unchanged. */
   set(patch: ScenePatch): void
   /** Change what the particles gather into. Throws if a custom SDF fails to compile. */
   morph(source: SourceSpec, options?: { via?: Via }): void
@@ -130,6 +131,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   if (!gl) throw new UnsupportedError("WebGL2 is not available")
   if (!gl.getExtension("EXT_color_buffer_float")) throw new UnsupportedError("Float render targets are not available")
 
+  const initialProblems = validateScene(initial)
+  if (initialProblems.length) throw new SceneError(initialProblems)
   let scene = applyPatch(DEFAULT_SCENE, initial)
   const listeners = new Map<FieldEvent, Set<(detail: unknown) => void>>()
   const emit = (event: FieldEvent, detail?: unknown) => listeners.get(event)?.forEach((l) => l(detail))
@@ -277,6 +280,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   }
 
   function morph(source: SourceSpec, morphOptions: { via?: Via } = {}) {
+    const problems = validateScene({ source })
+    if (problems.length) throw new SceneError(problems)
     const program = programFor(source) // throws on bad GLSL before anything changes
     const seed = source.seed ?? randomSeed()
     const via = reduced ? "direct" : morphOptions.via ?? scene.motion.via
@@ -364,6 +369,8 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   listeners.set("source", new Set([() => readColors(false)]))
 
   function set(patch: ScenePatch) {
+    const problems = validateScene(patch)
+    if (problems.length) throw new SceneError(problems)
     const prev = scene
     const { source, ...rest } = patch
     scene = applyPatch(scene, rest)

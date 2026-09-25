@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harasyn.co/engine/scene.schema.json",
+  "title": "Scene",
+  "description": "Everything a @harasyn/engine field shows. Pass a whole scene or any part of one to field.set(); parts you leave out keep their current values. Changing `source` morphs the particles to it.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "description": "What the particles gather into. Replaced whole, never merged.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "A built-in 3D form.",
+          "additionalProperties": false,
+          "required": ["type", "form"],
+          "properties": {
+            "type": { "const": "shape" },
+            "form": { "enum": ["cells", "gyroid", "knot", "harmonic", "chladni"], "description": "cells: living cells that divide and fuse. gyroid: a breathing minimal surface in a sphere. knot: a flowing torus knot. harmonic: a radiolarian made of spherical harmonics. chladni: sand on a vibrating plate, drifting between modes." },
+            "seed": { "$ref": "#/$defs/seed" }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A custom 3D shape from a signed distance function.",
+          "additionalProperties": false,
+          "required": ["type", "glsl"],
+          "properties": {
+            "type": { "const": "sdf" },
+            "glsl": { "type": "string", "minLength": 1, "description": "Body of the GLSL function `float sdf(vec3 p)`: return the signed distance from p to a surface that fits inside radius ~1. Can use uTime (seconds), uSeed (vec4, 0..1), PI, rot(angle) -> mat2, smin(a, b, k) and vnoise(vec3)." },
+            "seed": { "$ref": "#/$defs/seed" }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A curve that draws itself: the drawn part grows from t = 0 to `length` over `duration` seconds, with the particles spread along it.",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "curve" },
+            "curve": { "enum": ["phi-rotation"], "description": "phi-rotation: two arms turning at speeds 1 and the golden ratio, which never quite closes." },
+            "glsl": { "type": "string", "minLength": 1, "description": "Body of the GLSL function `vec3 curve(float t)`, returning a point inside radius ~1. Can use PI. Give this or `curve`." },
+            "length": { "type": "number", "exclusiveMinimum": 0, "description": "Parameter range drawn, 0..length." },
+            "duration": { "type": "number", "minimum": 0, "description": "Seconds to draw the whole range. 0 draws it at once." },
+            "seed": { "$ref": "#/$defs/seed" }
+          }
+        }
+      ]
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["dots", "squares", "streaks", "ascii"], "description": "dots: soft round points. squares: crisp square points. streaks: short trails along each particle's motion. ascii: characters (see `ascii`)." },
+        "size": { "type": "number", "minimum": 0.25, "maximum": 20, "description": "Particle size in CSS px (dots, squares, streaks)." },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "palette": {
+          "description": "A palette name, or colours to change.",
+          "oneOf": [
+            { "enum": ["v1", "mono", "ember", "ocean", "phosphor", "paper"], "description": "v1: harasyn.co's grey-brown and blue. mono: greys. ember: fire. ocean: deep blue and cyan. phosphor: green terminal. paper: dark ink on a light background." },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "background": { "$ref": "#/$defs/color", "description": "Page background." },
+                "shadow": { "$ref": "#/$defs/color", "description": "Crevices and the far side of the form." },
+                "body": { "$ref": "#/$defs/color", "description": "The form in shade." },
+                "mid": { "$ref": "#/$defs/color", "description": "The form's midtone." },
+                "light": { "$ref": "#/$defs/color", "description": "The form in full light." },
+                "rim": { "$ref": "#/$defs/color", "description": "Rims and edges." },
+                "accent": { "oneOf": [{ "const": "form" }, { "$ref": "#/$defs/color" }], "description": "Tints rims and loose particles. \"form\" uses each built-in form's own accent." },
+                "loose": { "$ref": "#/$defs/color", "description": "Particles in flight and at rest." }
+              }
+            }
+          ]
+        },
+        "streaks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "length": { "type": "number", "minimum": 0, "maximum": 1, "description": "Seconds of motion each streak covers." }
+          }
+        },
+        "ascii": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cell": { "type": "number", "minimum": 3, "maximum": 64, "description": "Character height in CSS px." },
+            "chars": { "type": "string", "minLength": 2, "description": "Characters from empty to full; the first is usually a space." },
+            "grid": { "type": "boolean", "description": "true: one character per grid cell, like a terminal. false: characters float with individual particles." },
+            "color": { "oneOf": [{ "const": "shade" }, { "$ref": "#/$defs/color" }], "description": "\"shade\" colours characters by the lit form; a hex colour prints everything in one ink." },
+            "contrast": { "type": "number", "minimum": 0.05, "maximum": 10, "description": "How quickly cells fill up to the densest character." },
+            "font": { "type": "string", "minLength": 1, "description": "CSS font family for the characters." }
+          }
+        }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projection": { "enum": ["perspective", "isometric"], "description": "isometric is orthographic, with no perspective. Switching resets pitch to the projection's default unless pitch is given too." },
+        "yaw": { "type": "number", "description": "Rotation about the vertical axis, degrees." },
+        "pitch": { "type": "number", "minimum": -85, "maximum": 85, "description": "Tilt of the top towards the viewer, degrees. Isometric is 35.264." },
+        "spin": { "type": "number", "minimum": -360, "maximum": 360, "description": "Auto-rotation, degrees per second." },
+        "zoom": { "type": "number", "minimum": 0.1, "maximum": 10 },
+        "drag": { "type": "boolean", "description": "Let the pointer drag to rotate." }
+      }
+    },
+    "particles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": { "oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 256, "maximum": 1048576 }], "description": "Number of particles, rounded to a square. \"auto\" picks by device and steps down if frames run slow." }
+      }
+    },
+    "reservoir": {
+      "type": "object",
+      "description": "Where idle particles wait.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["band", "field", "none"], "description": "band: a soft pool along the bottom. field: faint dust across the whole view, so forms gather from anywhere. none: out of sight; particles fade in near the form." },
+        "height": { "type": "number", "minimum": 0, "maximum": 1, "description": "Height of the band as a share of the view." },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1, "description": "How visible resting particles are." },
+        "drift": { "type": "number", "minimum": 0, "maximum": 2, "description": "How fast resting particles drift." }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gather": { "type": "number", "minimum": 0.1, "maximum": 60, "description": "Seconds for a form to gather out of the reservoir." },
+        "scatter": { "type": "number", "minimum": 0.1, "maximum": 60, "description": "Seconds for a form to let go." },
+        "reserve": { "type": "number", "minimum": 0, "maximum": 1, "description": "Share of particles that stay in the reservoir." },
+        "via": { "enum": ["direct", "reservoir"], "description": "How a change of source travels: particles slide straight over, or fall to the reservoir and rise again." },
+        "autoplay": {
+          "description": "Cycle through built-in forms on a timer, or null to stay put.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["forms", "hold"],
+              "properties": {
+                "forms": { "type": "array", "minItems": 1, "items": { "enum": ["cells", "gyroid", "knot", "harmonic", "chladni"] } },
+                "hold": { "type": "number", "minimum": 1, "description": "Seconds each form holds after gathering." }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "description": "a hex colour, like #d9d6ce" },
+    "seed": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number", "minimum": 0, "maximum": 1 }, "description": "Four numbers 0..1 that vary the shape. Random if left out." }
+  }
+}
