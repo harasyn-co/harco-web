@@ -11,7 +11,7 @@ import { Wordmark } from "./components/wordmark"
 const LOOK = (looks.looks as Record<string, ScenePatch>)[looks.active] ?? {}
 
 // Shown instead of the live field when WebGL2 is unavailable.
-const POSTER_SRC = "/v1-poster.jpg"
+const POSTER_SRC = "/v2-poster.jpg"
 
 // In development, `?poster` hides the text so a clean poster can be captured.
 const devParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null
