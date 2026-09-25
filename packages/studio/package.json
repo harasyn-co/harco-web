@@ -1,0 +1,16 @@
+{
+  "name": "@harasyn/studio",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A control panel for @harasyn/engine fields: every scene setting, editable JSON, and saved looks. For development, not for visitors.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@harasyn/engine": "*"
+  }
+}

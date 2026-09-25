@@ -1,208 +1,21 @@
-import { createField, SCENE_SCHEMA, SceneError, CURVES, CURVE_NAMES, FORMS, FORM_NAMES, PALETTES, type PaletteName, type CurveName, type Field, type FormName, type Scene, type ScenePatch } from "@harasyn/engine"
+import { createField, FORM_NAMES, type Field } from "@harasyn/engine"
+import { mountStudio, sceneFromHash } from "@harasyn/studio"
 
 const canvas = document.getElementById("field") as HTMLCanvasElement
-
-// Scenes travel in the URL hash as base64url JSON.
-function encodeScene(scene: Scene) {
-  const bytes = new TextEncoder().encode(JSON.stringify(scene))
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
-}
-function readSharedScene(): ScenePatch | null {
-  const m = location.hash.match(/scene=([\w-]+)/)
-  if (!m) return null
-  try {
-    const b64 = m[1].replace(/-/g, "+").replace(/_/g, "/")
-    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))))
-  } catch {
-    return null
-  }
-}
-const panel = document.getElementById("panel")!
 
 let field: Field
 try {
   // ?reduced forces reduced motion, to preview it without changing system settings.
   // #scene=... holds a shared scene (see "Copy link").
   const params = new URLSearchParams(location.search)
-  const shared = readSharedScene()
-  field = createField(canvas, shared ?? {
+  field = createField(canvas, sceneFromHash() ?? {
     motion: { autoplay: { forms: FORM_NAMES, hold: 12 } },
   }, { reducedMotion: params.has("reduced") ? true : undefined })
 } catch (err) {
-  panel.innerHTML = `<h1>Engine playground</h1><p class="error">${(err as Error).message}</p>`
+  document.body.append(Object.assign(document.createElement("p"), { className: "error", textContent: (err as Error).message }))
   throw err
 }
 // Handy for driving the field from the console or an agent.
 ;(window as unknown as { field: Field }).field = field
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Record<string, unknown> = {}, children: (Node | string)[] = []) => {
-  const node: HTMLElementTagNameMap[K] = document.createElement(tag)
-  Object.assign(node, props)
-  node.append(...children)
-  return node
-}
-
-function section(title: string, ...rows: Node[]) {
-  return el("section", {}, [el("h2", { textContent: title }), ...rows])
-}
-
-function segmented<T extends string>(options: readonly T[], label: (v: T) => string, get: () => T, pick: (v: T) => void) {
-  const row = el("div", { className: "seg" })
-  const buttons = options.map((v) => {
-    const b = el("button", { textContent: label(v), type: "button" })
-    b.addEventListener("click", () => { pick(v); refresh() })
-    row.append(b)
-    return { v, b }
-  })
-  refreshers.push(() => buttons.forEach(({ v, b }) => b.classList.toggle("on", get() === v)))
-  return row
-}
-
-function slider(label: string, min: number, max: number, step: number, get: () => number, put: (v: number) => void) {
-  const out = el("output")
-  const input = el("input", { type: "range", min: String(min), max: String(max), step: String(step) })
-  input.addEventListener("input", () => { put(Number(input.value)); refresh() })
-  refreshers.push(() => {
-    if (document.activeElement !== input) input.value = String(get())
-    out.textContent = String(get())
-  })
-  return el("label", { className: "slider" }, [el("span", { textContent: label }), input, out])
-}
-
-function button(label: string, action: () => void) {
-  const b = el("button", { textContent: label, type: "button" })
-  b.addEventListener("click", () => { action(); refresh() })
-  return b
-}
-
-const refreshers: (() => void)[] = []
-const scene = () => field.getScene()
-const set = (patch: ScenePatch) => field.set(patch)
-const currentForm = () => { const s = scene().source; return s.type === "shape" ? s.form : ("" as FormName) }
-const currentPalette = () => {
-  const p = scene().style.palette
-  return ((Object.keys(PALETTES) as PaletteName[]).find((k) => PALETTES[k].background === p.background && PALETTES[k].body === p.body) ?? "") as PaletteName
-}
-const currentCurve = () => { const s = scene().source; return s.type === "curve" && s.curve ? s.curve : ("" as CurveName) }
-
-// The scene as editable JSON. Apply validates it against the schema and
-// shows any problems; the source is only re-applied if it changed.
-const json = el("textarea", { className: "json", spellcheck: false, rows: 14 })
-const problems = el("pre", { className: "problems" })
-function applyJson() {
-  problems.textContent = ""
-  let patch: ScenePatch
-  try {
-    patch = JSON.parse(json.value)
-  } catch (err) {
-    problems.textContent = `Not valid JSON: ${(err as Error).message}`
-    return
-  }
-  if (patch.source && JSON.stringify(patch.source) === JSON.stringify(scene().source)) delete patch.source
-  try {
-    field.set(patch)
-    refresh(true)
-  } catch (err) {
-    problems.textContent = err instanceof SceneError ? err.problems.join("\n") : (err as Error).message
-  }
-}
-json.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); applyJson() }
-})
-const copied = el("span", { className: "note" })
-const jsonTools = el("div", { className: "row" }, [
-  button("Apply ⌘↵", applyJson),
-  button("Copy link", async () => {
-    location.hash = `scene=${encodeScene(scene())}`
-    try { await navigator.clipboard.writeText(location.href); copied.textContent = "copied" } catch { copied.textContent = "in the address bar" }
-    setTimeout(() => (copied.textContent = ""), 2000)
-  }),
-  button("Schema", () => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(SCENE_SCHEMA, null, 2)], { type: "application/json" }))
-    window.open(url, "_blank")
-  }),
-  copied,
-])
-const stats = el("p", { className: "stats" })
-
-// Tap the title to fold the panel away, e.g. on a phone.
-const title = el("h1", { textContent: "Engine playground", title: "Show or hide the controls" })
-title.addEventListener("click", () => panel.classList.toggle("folded"))
-if (window.matchMedia("(max-width: 600px)").matches) panel.classList.add("folded")
-
-panel.append(
-  title,
-  stats,
-  section("Form",
-    segmented(FORM_NAMES, (f) => FORMS[f].label, currentForm, (form) => field.morph({ type: "shape", form })),
-    el("div", { className: "row" }, [
-      button("Scatter", () => field.scatter()),
-      button("Gather", () => field.gather()),
-    ]),
-  ),
-  section("Math",
-    segmented(CURVE_NAMES, (c) => CURVES[c].label, currentCurve, (curve) => {
-      // Plane plots read best face-on.
-      set({ camera: { yaw: 0, pitch: 0, spin: 0 }, motion: { autoplay: null } })
-      field.morph({ type: "curve", curve })
-    }),
-  ),
-  section("Motion",
-    segmented(["direct", "reservoir"] as const, (v) => (v === "direct" ? "Slide" : "Via reservoir"), () => scene().motion.via, (via) => set({ motion: { via } })),
-    segmented(["on", "off"] as const, (v) => (v === "on" ? "Autoplay" : "Hold"), () => (scene().motion.autoplay ? "on" : "off"),
-      (v) => set({ motion: { autoplay: v === "on" ? { forms: FORM_NAMES, hold: 12 } : null } })),
-  ),
-  section("Reservoir",
-    segmented(["band", "field", "none"] as const, (v) => ({ band: "Band", field: "Anywhere", none: "Off" })[v], () => scene().reservoir.mode, (mode) => set({ reservoir: { mode } })),
-    slider("Height", 0.02, 0.4, 0.01, () => scene().reservoir.height, (height) => set({ reservoir: { height } })),
-    slider("Opacity", 0, 1, 0.05, () => scene().reservoir.opacity, (opacity) => set({ reservoir: { opacity } })),
-    slider("Drift", 0, 0.3, 0.01, () => scene().reservoir.drift, (drift) => set({ reservoir: { drift } })),
-    slider("Reserve", 0, 0.5, 0.01, () => scene().motion.reserve, (reserve) => set({ motion: { reserve } })),
-  ),
-  section("Camera",
-    segmented(["perspective", "isometric"] as const, (v) => (v === "perspective" ? "Perspective" : "Isometric"), () => scene().camera.projection, (projection) => set({ camera: { projection } })),
-    slider("Spin °/s", -30, 30, 0.5, () => scene().camera.spin, (spin) => set({ camera: { spin } })),
-    slider("Zoom", 0.5, 2, 0.05, () => scene().camera.zoom, (zoom) => set({ camera: { zoom } })),
-  ),
-  section("Style",
-    segmented(["dots", "squares", "streaks", "ascii"] as const, (v) => ({ dots: "Dots", squares: "Squares", streaks: "Streaks", ascii: "ASCII" })[v],
-      () => scene().style.kind, (kind) => set({ style: { kind } })),
-    segmented(Object.keys(PALETTES) as PaletteName[], (v) => v, currentPalette, (palette) => set({ style: { palette } })),
-    slider("Size px", 0.5, 4, 0.1, () => scene().style.size, (size) => set({ style: { size } })),
-    slider("Opacity", 0.1, 1, 0.05, () => scene().style.opacity, (opacity) => set({ style: { opacity } })),
-    slider("Streak s", 0.01, 0.3, 0.01, () => scene().style.streaks.length, (length) => set({ style: { streaks: { length } } })),
-  ),
-  section("ASCII",
-    segmented(["grid", "free"] as const, (v) => (v === "grid" ? "Grid" : "Per particle"), () => (scene().style.ascii.grid ? "grid" : "free"),
-      (v) => set({ style: { kind: "ascii", ascii: { grid: v === "grid" } } })),
-    segmented([" .:-=+*#%@", " .·:;+=xX$&", " ░▒▓█", " 01", " ·•●"] as const, (v) => v.trim() || "·", () => scene().style.ascii.chars as " 01",
-      (chars) => set({ style: { kind: "ascii", ascii: { chars } } })),
-    segmented(["shade", "#d9d6ce", "#4dff6a", "#ffb347"] as const, (v) => (v === "shade" ? "Shaded" : v), () => scene().style.ascii.color as "shade",
-      (color) => set({ style: { kind: "ascii", ascii: { color } } })),
-    slider("Cell px", 4, 24, 1, () => scene().style.ascii.cell, (cell) => set({ style: { ascii: { cell } } })),
-    slider("Contrast", 0.2, 3, 0.1, () => scene().style.ascii.contrast, (contrast) => set({ style: { ascii: { contrast } } })),
-  ),
-  section("Particles",
-    segmented(["auto", "16384", "65536", "147456", "262144"] as const,
-      (v) => (v === "auto" ? "Auto" : `${Math.round(Number(v) / 1024)}k`),
-      () => String(scene().particles.count) as "auto",
-      (v) => set({ particles: { count: v === "auto" ? "auto" : Number(v) } })),
-  ),
-  section("Scene JSON", json, problems, jsonTools),
-)
-
-function refresh(force = false) {
-  refreshers.forEach((r) => r())
-  const s: Scene = scene()
-  // Leave the JSON alone while someone is editing it.
-  if (force || document.activeElement !== json) json.value = JSON.stringify(s, null, 2)
-}
-field.on("source", () => refresh())
-json.addEventListener("focus", () => (problems.textContent = ""))
-refresh()
-
-setInterval(() => {
-  const s = field.stats()
-  const v = field.getView()
-  stats.textContent = `${s.particles.toLocaleString()} particles · ${s.fps} fps · quality ${s.quality}${s.reducedMotion ? " · reduced motion" : ""} · yaw ${v.yaw.toFixed(0)}° pitch ${v.pitch.toFixed(0)}°`
-}, 500)
+mountStudio(field, { title: "Engine playground", shareLinks: true })

@@ -5,9 +5,18 @@
   "type": "module",
   "description": "Particle engine: particles gather into shapes, harmonics, math, images and UI.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./react": "./src/react.tsx"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }
