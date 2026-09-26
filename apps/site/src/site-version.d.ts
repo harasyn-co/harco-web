@@ -3,3 +3,6 @@ declare module "virtual:site-version" {
   const App: ComponentType
   export default App
 }
+
+/** Whether the articles (/experiments) are in this build. */
+declare const __ARTICLES__: boolean

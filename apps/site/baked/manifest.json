@@ -1,0 +1,984 @@
+{
+ "pages": {
+  "/experiments": {
+   "title": "Experiments",
+   "widths": [
+    {
+     "width": 640,
+     "height": 595,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-640@1x-0-7ce37ea4fb.png",
+       "top": 0,
+       "height": 400,
+       "ink": 19605
+      },
+      {
+       "src": "/baked/experiments-640@1x-1-207c012e5f.png",
+       "top": 400,
+       "height": 195,
+       "ink": 10772
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments/drawing-with-particles",
+       "x": 0,
+       "y": 134,
+       "w": 640,
+       "h": 124
+      },
+      {
+       "href": "/experiments/frequencies-you-can-see",
+       "x": 0,
+       "y": 302,
+       "w": 640,
+       "h": 124
+      },
+      {
+       "href": "/experiments/interfaces-that-assemble",
+       "x": 0,
+       "y": 470,
+       "w": 640,
+       "h": 124
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 605,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-350@1x-0-59149ff4e3.png",
+       "top": 0,
+       "height": 400,
+       "ink": 15998
+      },
+      {
+       "src": "/baked/experiments-350@1x-1-360bd70d0b.png",
+       "top": 400,
+       "height": 205,
+       "ink": 7954
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments/drawing-with-particles",
+       "x": 0,
+       "y": 88,
+       "w": 350,
+       "h": 116
+      },
+      {
+       "href": "/experiments/frequencies-you-can-see",
+       "x": 0,
+       "y": 248,
+       "w": 350,
+       "h": 141
+      },
+      {
+       "href": "/experiments/interfaces-that-assemble",
+       "x": 0,
+       "y": 434,
+       "w": 350,
+       "h": 171
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 630,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-310@1x-0-15b95bd650.png",
+       "top": 0,
+       "height": 400,
+       "ink": 15325
+      },
+      {
+       "src": "/baked/experiments-310@1x-1-c00a6a9e84.png",
+       "top": 400,
+       "height": 230,
+       "ink": 8533
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments/drawing-with-particles",
+       "x": 0,
+       "y": 88,
+       "w": 310,
+       "h": 141
+      },
+      {
+       "href": "/experiments/frequencies-you-can-see",
+       "x": 0,
+       "y": 273,
+       "w": 310,
+       "h": 141
+      },
+      {
+       "href": "/experiments/interfaces-that-assemble",
+       "x": 0,
+       "y": 458,
+       "w": 310,
+       "h": 171
+      }
+     ]
+    },
+    {
+     "width": 640,
+     "height": 595,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-640@2x-0-5a95618f89.png",
+       "top": 0,
+       "height": 400,
+       "ink": 66471
+      },
+      {
+       "src": "/baked/experiments-640@2x-1-6e311fba62.png",
+       "top": 400,
+       "height": 195,
+       "ink": 35132
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments/drawing-with-particles",
+       "x": 0,
+       "y": 134,
+       "w": 640,
+       "h": 124
+      },
+      {
+       "href": "/experiments/frequencies-you-can-see",
+       "x": 0,
+       "y": 302,
+       "w": 640,
+       "h": 124
+      },
+      {
+       "href": "/experiments/interfaces-that-assemble",
+       "x": 0,
+       "y": 470,
+       "w": 640,
+       "h": 124
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 605,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-350@2x-0-b968b3f12c.png",
+       "top": 0,
+       "height": 400,
+       "ink": 51574
+      },
+      {
+       "src": "/baked/experiments-350@2x-1-fbe8b26504.png",
+       "top": 400,
+       "height": 205,
+       "ink": 25728
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments/drawing-with-particles",
+       "x": 0,
+       "y": 88,
+       "w": 350,
+       "h": 116
+      },
+      {
+       "href": "/experiments/frequencies-you-can-see",
+       "x": 0,
+       "y": 248,
+       "w": 350,
+       "h": 141
+      },
+      {
+       "href": "/experiments/interfaces-that-assemble",
+       "x": 0,
+       "y": 434,
+       "w": 350,
+       "h": 171
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 630,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-310@2x-0-3783b1db6f.png",
+       "top": 0,
+       "height": 400,
+       "ink": 49831
+      },
+      {
+       "src": "/baked/experiments-310@2x-1-3e2591b131.png",
+       "top": 400,
+       "height": 230,
+       "ink": 27621
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments/drawing-with-particles",
+       "x": 0,
+       "y": 88,
+       "w": 310,
+       "h": 141
+      },
+      {
+       "href": "/experiments/frequencies-you-can-see",
+       "x": 0,
+       "y": 273,
+       "w": 310,
+       "h": 141
+      },
+      {
+       "href": "/experiments/interfaces-that-assemble",
+       "x": 0,
+       "y": 458,
+       "w": 310,
+       "h": 171
+      }
+     ]
+    }
+   ]
+  },
+  "/experiments/drawing-with-particles": {
+   "title": "Drawing with particles",
+   "widths": [
+    {
+     "width": 640,
+     "height": 979,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-drawing-with-particles-640@1x-0-73de6286a8.png",
+       "top": 0,
+       "height": 400,
+       "ink": 27433
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-640@1x-1-f0694f81da.png",
+       "top": 400,
+       "height": 400,
+       "ink": 21700
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-640@1x-2-0df4fb9221.png",
+       "top": 800,
+       "height": 179,
+       "ink": 11715
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 1304,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@1x-0-c098aa6008.png",
+       "top": 0,
+       "height": 400,
+       "ink": 15945
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@1x-1-50d82e3aa7.png",
+       "top": 400,
+       "height": 400,
+       "ink": 17470
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@1x-2-0ef14f0b4b.png",
+       "top": 800,
+       "height": 400,
+       "ink": 14599
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@1x-3-0b9a782976.png",
+       "top": 1200,
+       "height": 104,
+       "ink": 3690
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 1456,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@1x-0-790b3e5b7e.png",
+       "top": 0,
+       "height": 400,
+       "ink": 12506
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@1x-1-dfaa3efb07.png",
+       "top": 400,
+       "height": 400,
+       "ink": 16988
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@1x-2-bc6a8f0c87.png",
+       "top": 800,
+       "height": 400,
+       "ink": 11737
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@1x-3-f520ccde7c.png",
+       "top": 1200,
+       "height": 256,
+       "ink": 10548
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 640,
+     "height": 979,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-drawing-with-particles-640@2x-0-20c7c8102b.png",
+       "top": 0,
+       "height": 400,
+       "ink": 92911
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-640@2x-1-bc8dbcf7ee.png",
+       "top": 400,
+       "height": 400,
+       "ink": 71814
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-640@2x-2-d1868ccaaa.png",
+       "top": 800,
+       "height": 179,
+       "ink": 38915
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 1304,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@2x-0-c064097d45.png",
+       "top": 0,
+       "height": 400,
+       "ink": 53352
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@2x-1-05b40093a0.png",
+       "top": 400,
+       "height": 400,
+       "ink": 58026
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@2x-2-6f53034827.png",
+       "top": 800,
+       "height": 400,
+       "ink": 48802
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-350@2x-3-1f1b36b28a.png",
+       "top": 1200,
+       "height": 104,
+       "ink": 12016
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 1456,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@2x-0-03d2c1a7d7.png",
+       "top": 0,
+       "height": 400,
+       "ink": 41635
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@2x-1-9f6a7a42d0.png",
+       "top": 400,
+       "height": 400,
+       "ink": 56661
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@2x-2-3490e7073b.png",
+       "top": 800,
+       "height": 400,
+       "ink": 39073
+      },
+      {
+       "src": "/baked/experiments-drawing-with-particles-310@2x-3-988c2be823.png",
+       "top": 1200,
+       "height": 256,
+       "ink": 35030
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    }
+   ]
+  },
+  "/experiments/frequencies-you-can-see": {
+   "title": "Frequencies you can see",
+   "widths": [
+    {
+     "width": 640,
+     "height": 1079,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-640@1x-0-9970dbebb7.png",
+       "top": 0,
+       "height": 400,
+       "ink": 17946
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-640@1x-1-492e28a5d5.png",
+       "top": 400,
+       "height": 400,
+       "ink": 18224
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-640@1x-2-6c9320bd45.png",
+       "top": 800,
+       "height": 279,
+       "ink": 14579
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 1274,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@1x-0-1ddf0ee0af.png",
+       "top": 0,
+       "height": 400,
+       "ink": 12210
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@1x-1-779d530f7d.png",
+       "top": 400,
+       "height": 400,
+       "ink": 14222
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@1x-2-30ab0c2abf.png",
+       "top": 800,
+       "height": 400,
+       "ink": 13725
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@1x-3-02141f6b17.png",
+       "top": 1200,
+       "height": 74,
+       "ink": 1485
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 1303,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@1x-0-1f27f0ad8a.png",
+       "top": 0,
+       "height": 400,
+       "ink": 12153
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@1x-1-e6c59a815d.png",
+       "top": 400,
+       "height": 400,
+       "ink": 13472
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@1x-2-5c17dac1a7.png",
+       "top": 800,
+       "height": 400,
+       "ink": 13712
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@1x-3-d6212a8d29.png",
+       "top": 1200,
+       "height": 103,
+       "ink": 1980
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 640,
+     "height": 1079,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-640@2x-0-4b3ae733c9.png",
+       "top": 0,
+       "height": 400,
+       "ink": 61508
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-640@2x-1-93c065c684.png",
+       "top": 400,
+       "height": 400,
+       "ink": 62055
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-640@2x-2-bc12693738.png",
+       "top": 800,
+       "height": 279,
+       "ink": 48897
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 1274,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@2x-0-1fa257c0c0.png",
+       "top": 0,
+       "height": 400,
+       "ink": 41046
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@2x-1-6090ef6f05.png",
+       "top": 400,
+       "height": 400,
+       "ink": 48261
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@2x-2-e80c6bafde.png",
+       "top": 800,
+       "height": 400,
+       "ink": 45900
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-350@2x-3-821a8d20b1.png",
+       "top": 1200,
+       "height": 74,
+       "ink": 4728
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 1303,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@2x-0-2ca7990a55.png",
+       "top": 0,
+       "height": 400,
+       "ink": 40733
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@2x-1-169597415a.png",
+       "top": 400,
+       "height": 400,
+       "ink": 45468
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@2x-2-518b207211.png",
+       "top": 800,
+       "height": 400,
+       "ink": 45745
+      },
+      {
+       "src": "/baked/experiments-frequencies-you-can-see-310@2x-3-59878d3d9a.png",
+       "top": 1200,
+       "height": 103,
+       "ink": 6557
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    }
+   ]
+  },
+  "/experiments/interfaces-that-assemble": {
+   "title": "Interfaces that assemble themselves",
+   "widths": [
+    {
+     "width": 640,
+     "height": 979,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-640@1x-0-416cea85b0.png",
+       "top": 0,
+       "height": 400,
+       "ink": 20889
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-640@1x-1-ab94a5a954.png",
+       "top": 400,
+       "height": 400,
+       "ink": 16053
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-640@1x-2-a3efcddd78.png",
+       "top": 800,
+       "height": 179,
+       "ink": 11474
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 1086,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-350@1x-0-992d42002d.png",
+       "top": 0,
+       "height": 400,
+       "ink": 14312
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-350@1x-1-4be750731d.png",
+       "top": 400,
+       "height": 400,
+       "ink": 14341
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-350@1x-2-9f5923d146.png",
+       "top": 800,
+       "height": 286,
+       "ink": 10482
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 1210,
+     "scale": 1,
+     "tiles": [
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-310@1x-0-ca945cb27d.png",
+       "top": 0,
+       "height": 400,
+       "ink": 13836
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-310@1x-1-3bfe65c763.png",
+       "top": 400,
+       "height": 400,
+       "ink": 12275
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-310@1x-2-67674fda58.png",
+       "top": 800,
+       "height": 400,
+       "ink": 12915
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 640,
+     "height": 979,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-640@2x-0-76a55f1717.png",
+       "top": 0,
+       "height": 400,
+       "ink": 72108
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-640@2x-1-68b3ec7fde.png",
+       "top": 400,
+       "height": 400,
+       "ink": 53096
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-640@2x-2-f39bb45353.png",
+       "top": 800,
+       "height": 179,
+       "ink": 38257
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 350,
+     "height": 1086,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-350@2x-0-aa5d6ad15e.png",
+       "top": 0,
+       "height": 400,
+       "ink": 48163
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-350@2x-1-1794dad733.png",
+       "top": 400,
+       "height": 400,
+       "ink": 47859
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-350@2x-2-23ae41e33e.png",
+       "top": 800,
+       "height": 286,
+       "ink": 35030
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    },
+    {
+     "width": 310,
+     "height": 1210,
+     "scale": 2,
+     "tiles": [
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-310@2x-0-e34d17b728.png",
+       "top": 0,
+       "height": 400,
+       "ink": 46580
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-310@2x-1-826c54c48e.png",
+       "top": 400,
+       "height": 400,
+       "ink": 40955
+      },
+      {
+       "src": "/baked/experiments-interfaces-that-assemble-310@2x-2-4184186a2a.png",
+       "top": 800,
+       "height": 400,
+       "ink": 43129
+      }
+     ],
+     "links": [
+      {
+       "href": "/experiments",
+       "x": 0,
+       "y": 0,
+       "w": 106,
+       "h": 15
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "ui": {
+  "nav-experiments": [
+   {
+    "width": 96,
+    "height": 25,
+    "scale": 1,
+    "tiles": [
+     {
+      "src": "/baked/nav-experiments-96@1x-0-3c2e8ea3b4.png",
+      "top": 0,
+      "height": 25,
+      "ink": 384
+     }
+    ],
+    "links": [
+     {
+      "href": "/experiments",
+      "x": 0,
+      "y": 0,
+      "w": 95,
+      "h": 25
+     }
+    ]
+   },
+   {
+    "width": 96,
+    "height": 25,
+    "scale": 2,
+    "tiles": [
+     {
+      "src": "/baked/nav-experiments-96@2x-0-b4daed0cf5.png",
+      "top": 0,
+      "height": 25,
+      "ink": 1184
+     }
+    ],
+    "links": [
+     {
+      "href": "/experiments",
+      "x": 0,
+      "y": 0,
+      "w": 95,
+      "h": 25
+     }
+    ]
+   }
+  ]
+ }
+}
