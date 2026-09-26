@@ -22,4 +22,4 @@ export const studioVersion = "v2"
  * Whether articles (/experiments) are in the production build. They always run
  * in development. To preview a build with them: SITE_ARTICLES=1 npm run build
  */
-export const articlesLive = false
+export const articlesLive = true
