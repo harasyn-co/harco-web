@@ -1,6 +1,83 @@
 {
-  "active": "site",
+  "active": "hi-def",
   "looks": {
+    "hi-def": {
+      "source": {
+        "type": "text",
+        "text": "in experimentation mode",
+        "width": 0.8
+      },
+      "style": {
+        "kind": "squares",
+        "size": 0.6,
+        "opacity": 1,
+        "palette": {
+          "background": "#020203",
+          "shadow": "#1a1626",
+          "body": "#584840",
+          "mid": "#887a70",
+          "light": "#c0b6aa",
+          "rim": "#305c96",
+          "accent": "form",
+          "loose": "#ccc7bf"
+        },
+        "streaks": {
+          "length": 0.06
+        },
+        "type": {
+          "glyphs": "strokes",
+          "weight": 0.08,
+          "density": 0.05,
+          "speed": 9,
+          "width": 2.4
+        },
+        "ascii": {
+          "cell": 10,
+          "chars": " .:-=+*#%@",
+          "grid": true,
+          "color": "shade",
+          "contrast": 1,
+          "font": "\"IBM Plex Mono\", ui-monospace, Menlo, monospace"
+        }
+      },
+      "camera": {
+        "projection": "perspective",
+        "yaw": 0,
+        "pitch": 15,
+        "spin": 4.5,
+        "zoom": 1.5,
+        "drag": true
+      },
+      "particles": {
+        "count": "auto"
+      },
+      "reservoir": {
+        "mode": "field",
+        "height": 0.12,
+        "opacity": 0.35,
+        "drift": 0.05
+      },
+      "motion": {
+        "gather": 3,
+        "scatter": 2.5,
+        "reserve": 0.12,
+        "via": "reservoir",
+        "autoplay": {
+          "forms": [
+            {
+              "type": "text",
+              "text": "in experimentation mode",
+              "width": 0.8
+            },
+            "cells",
+            "gyroid",
+            "knot",
+            "harmonic"
+          ],
+          "hold": 12
+        }
+      }
+    },
     "playground": {
       "source": {
         "type": "shape",
@@ -65,7 +142,7 @@
         }
       }
     },
-    "site": {
+    "site-ascii": {
       "source": {
         "type": "text",
         "text": "in experimentation mode"
