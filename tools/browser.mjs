@@ -40,6 +40,12 @@ export async function openBrowser({ width = 1400, height = 900, port = 9333 } = 
   return {
     errors,
     sleep,
+    /** Any DevTools protocol command; resolves with its result. */
+    async send(method, params = {}) {
+      const r = await send(method, params)
+      if (r.error) throw new Error(`${method}: ${r.error.message}`)
+      return r.result
+    },
     async open(url, wait = 3000) { await send("Page.navigate", { url }); await sleep(wait) },
     async eval(expression) {
       const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })

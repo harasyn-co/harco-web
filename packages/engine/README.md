@@ -106,9 +106,36 @@ A **model** tunes how a layer's particles move and draw for one job
 | `relief` | Image shapes: dense and steady, slightly larger                  |
 | `wave`   | Harmonics: springy, keeps up with fast-changing shapes           |
 | `lite`   | Modest hardware: half the particles, no swirl, 1x pixels         |
+| `print`  | Pre-rendered text and UI: one particle per pixel, placed at once (default for rasters) |
 
 `particles.model` sets the main source's model; `lite` there also halves the
 particle count and caps the pixel ratio for the whole field.
+
+`place` positions the main source like a layer (`space`, `at`, `scale`), and
+`place.visible: false` lets it go to rest while the layers stay.
+
+## Text and UI made only of particles
+
+A **raster** source is a pre-rendered image, white ink on black; every inked
+pixel becomes one particle, carrying that pixel's coverage:
+
+```json
+{ "id": "page-0", "share": 0.3, "model": "print", "space": "screen",
+  "at": [-0.45, 0.64], "scale": 0.0021, "source": { "type": "raster", "src": "/baked/page-0.png" } }
+```
+
+With the `print` model the particles are placed at once, drawn as square
+pixels whatever the style, and snapped to the screen's pixel grid, so text
+reads as crisply as normal type; while print layers show, the field renders
+at the device's full pixel ratio. Use `field.fit(rect)` to turn a box on the
+page into `at` (its top-left, for a zero-size box) and world units per CSS px
+(divide by the raster's density for a 2x image). Give a layer at least as many
+particles as the image has inked pixels, or it draws an even subset.
+`preloadRaster(src)` decodes an image ahead of time.
+
+`motion.instant: true` makes every change land at once, with no flight, which
+suits pages of UI; pair it with `reservoir.opacity: 0` to hide resting
+particles.
 
 ## Studio
 

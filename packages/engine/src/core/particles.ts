@@ -38,6 +38,9 @@ uniform vec4 uFlight;        // the model's base speed, speed per distance, swir
 uniform vec4 uLayer;         // the layer's placement: offset xyz (world), scale
 uniform float uRestDim;      // scales resting visibility, so a crowded reservoir isn't brighter
 uniform float uSnap;         // 1 = jump straight to where each particle belongs
+uniform float uForm;         // with snap: seconds to condense out of a little dust (0 = at once)
+uniform float uFormAge;      // seconds since the layer appeared
+uniform float uDissolve;     // with snap: 0..1 through a removed layer's dissolve (0 = not leaving)
 uniform float uReset;        // 1 = put every particle at home
 
 layout(location = 0) out vec4 outPos;
@@ -120,7 +123,37 @@ void main() {
   vec3 to = target - pos;
   float dist = length(to);
 
-  if (uSnap > 0.5) {
+  float fade = -1.0;
+  // Print layers come and go like the forms do: out of dust spread across
+  // the whole view, and back out into it. Each grain has its own place in
+  // that dust, and a gentle curve on the way.
+  vec2 dust = (vec2(hash21(id * 5.17 + 2.9), hash21(id * 6.31 + 0.7)) * 2.0 - 1.0) * uView * 1.05;
+  vec2 bend = vec2(hash21(id * 8.93 + 3.1), hash21(id * 2.77 + 6.6)) - 0.5;
+  if (uSnap > 0.5 && uDissolve > 0.0 && wants) {
+    // Scattering: grains let go at staggered moments, drift out to their
+    // place in the dust and fade there. Text off screen simply goes.
+    bool seen = abs(target.x) < uView.x * 1.02 && abs(target.y) < uView.y * 1.02;
+    float h = hash21(id * 3.71 + 1.3);
+    float d = clamp((uDissolve - h * 0.35) / 0.65, 0.0, 1.0);
+    float e = d * d * (3.0 - 2.0 * d);
+    vec2 p = mix(target.xy, dust, e) + bend * length(uView) * 0.25 * sin(e * 3.14159);
+    pos = vec3(p, target.z);
+    vel = vec3(0.0);
+    attach = 1.0 - e;                                  // fainter as it travels
+    fade = seen ? 1.0 - smoothstep(0.55, 1.0, d) : 0.0;
+  } else if (uSnap > 0.5 && uForm > 0.0 && wants) {
+    // Gathering: grains leave their place in the dust at staggered moments
+    // and settle onto their pixels; once there they hold exactly. Progress
+    // follows the layer's age, so every grain of a new layer gathers,
+    // wherever it was before. attach holds it (below 0: not yet moving).
+    float h = hash21(id * 3.71 + 1.3);
+    attach = clamp((uFormAge - h * 0.45 * uForm) / (0.55 * uForm), -1.0, 1.0);
+    float e = clamp(attach, 0.0, 1.0);
+    e = 1.0 - pow(1.0 - e, 2.4);                       // quick to start, soft landing
+    vec2 p = mix(dust, target.xy, e) + bend * length(uView) * 0.25 * sin(e * 3.14159);
+    pos = vec3(p, target.z);
+    vel = vec3(0.0);
+  } else if (uSnap > 0.5) {
     // No travel: on the form if wanted, otherwise at home.
     pos = wants ? target : h.p;
     vel = vec3(0.0);
@@ -186,6 +219,9 @@ void main() {
   float vis = uReservoir.x < 0.5
     ? max(attach, smoothstep(0.6, 0.08, length(target - pos)))
     : max(mix(1.0, h.vis, atHome), attach);
+  if (fade >= 0.0) vis = fade;
+  // Condensing particles show once their delay has passed.
+  else if (uSnap > 0.5 && uForm > 0.0) vis = wants && attach >= 0.0 ? 1.0 : (wants ? 0.0 : vis);
   // Anchors marked 2 are held but hidden (a blinking cursor): stay, unseen.
   if (A.w > 1.5 && attach > 0.5) vis = 0.0;
 

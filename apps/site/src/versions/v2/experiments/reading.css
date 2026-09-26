@@ -1,0 +1,15 @@
+/* The reading view. Everything on it is drawn by the particles; the page
+   only holds its height (for scrolling) and empty areas over the links. */
+.reading { position: relative; z-index: 1; }
+
+.baked { position: relative; }
+.baked-link { position: absolute; display: block; border-radius: 6px; }
+.baked-link:focus-visible { outline: 1px solid rgb(217 214 206 / 0.5); outline-offset: 2px; }
+
+/* Once scrolled, the page passes under the wordmark rather than through it. */
+.reading-scrim {
+  position: fixed; inset: 0 0 auto; height: clamp(90px, 13vh, 130px); z-index: 2; pointer-events: none;
+  background: linear-gradient(to bottom, rgb(2 2 3 / 0.96) 45%, rgb(2 2 3 / 0));
+  opacity: 0; transition: opacity 0.3s ease;
+}
+.reading[data-scrolled] .reading-scrim { opacity: 1; }

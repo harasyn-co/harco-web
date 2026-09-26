@@ -251,7 +251,8 @@
             "type",
             "relief",
             "wave",
-            "lite"
+            "lite",
+            "print"
           ],
           "description": "How the base layer's particles move and draw. sculpt: 3D forms, drifting in on a current. type: text and UI, fast and crisp on the pixel grid. relief: image shapes, dense and steady. wave: harmonics, springy. lite: modest hardware, half the particles, no swirl."
         }
@@ -344,7 +345,19 @@
                           "cells",
                           "gyroid",
                           "knot",
-                          "harmonic"
+                          "harmonic",
+                          "entangle",
+                          "levitate",
+                          "qubit",
+                          "crispr",
+                          "origami",
+                          "kinesin",
+                          "gravwave",
+                          "webb",
+                          "dart",
+                          "neural",
+                          "graphene",
+                          "cloak"
                         ]
                       },
                       {
@@ -361,6 +374,43 @@
               }
             }
           ]
+        },
+        "instant": {
+          "type": "boolean",
+          "description": "Changes land at once, with no flight: particles are on their points or at rest immediately. For pages of UI."
+        }
+      }
+    },
+    "place": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the main source sits, as for a layer. E.g. move the form aside to make room for reading.",
+      "properties": {
+        "space": {
+          "enum": [
+            "world",
+            "screen"
+          ],
+          "description": "world turns with the camera; screen stays flat and fixed, for UI."
+        },
+        "at": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {
+            "type": "number"
+          },
+          "description": "Where the layer's centre sits. World: [x, y, z] in world units (forms are ~2 across). Screen: [x, y] from -1 to 1 across the view."
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "description": "Size multiplier."
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "False lets the main source fall away to rest while layers stay, e.g. behind a list. Default true."
         }
       }
     },
@@ -397,7 +447,8 @@
               "type",
               "relief",
               "wave",
-              "lite"
+              "lite",
+              "print"
             ],
             "description": "Defaults to type for text, sculpt for everything else."
           },
@@ -422,6 +473,10 @@
             "exclusiveMinimum": 0,
             "maximum": 10,
             "description": "Size multiplier."
+          },
+          "instant": {
+            "type": "boolean",
+            "description": "Show at once, skipping the model's formation (the print model's dust), e.g. for text scrolled into view."
           }
         }
       }
@@ -464,9 +519,21 @@
                 "cells",
                 "gyroid",
                 "knot",
-                "harmonic"
+                "harmonic",
+                "entangle",
+                "levitate",
+                "qubit",
+                "crispr",
+                "origami",
+                "kinesin",
+                "gravwave",
+                "webb",
+                "dart",
+                "neural",
+                "graphene",
+                "cloak"
               ],
-              "description": "cells: living cells that divide and fuse. gyroid: a breathing minimal surface in a sphere. knot: a flowing torus knot. harmonic: a radiolarian made of spherical harmonics."
+              "description": "cells: living cells that divide and fuse. gyroid: a breathing minimal surface in a sphere. knot: a flowing torus knot. harmonic: a radiolarian made of spherical harmonics. entangle: two entangled particles whose spins flip opposite. levitate: a magnet locked above a superconductor, with field lines and flux tubes. qubit: a Bloch sphere with a precessing state arrow. crispr: Cas9 unzipping and cutting a DNA helix, then repair. origami: a DNA scaffold folding into a box. kinesin: a motor protein walking a microtubule with its cargo. gravwave: black holes merging, rippling a spacetime grid. webb: the JWST sunshield and mirror unfolding. dart: a spacecraft hitting an asteroid moon, ejecta and orbit shift. neural: a pulse carrying a cat image through network layers. graphene: a honeycomb of carbon atoms that rolls into a nanotube and back. cloak: light rays flowing round a metamaterial shell and closing up behind it."
             },
             "seed": {
               "$ref": "#/$defs/seed"
@@ -590,6 +657,33 @@
               "minimum": 0.005,
               "maximum": 1,
               "description": "Share of particles that make the letters. Low values let the grain show; high values read as solid type. Overrides style.type."
+            },
+            "seed": {
+              "$ref": "#/$defs/seed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A pre-rendered image (white ink on black). Every inked pixel becomes one particle, in pixel units from the top-left, y down. Place with a screen layer scaled to CSS px and the print model.",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "src"
+          ],
+          "properties": {
+            "type": {
+              "const": "raster"
+            },
+            "src": {
+              "type": "string",
+              "description": "URL of the image (PNG)."
+            },
+            "threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Coverage below this is left empty. Default 0.03."
             },
             "seed": {
               "$ref": "#/$defs/seed"

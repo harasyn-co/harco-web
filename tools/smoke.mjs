@@ -3,6 +3,7 @@
 // and tabs are there, the site's build has no studio, and nothing throws.
 // usage: npm run smoke
 import { execSync, spawn } from "node:child_process"
+import fs from "node:fs"
 import { openBrowser } from "./browser.mjs"
 
 const run = (cmd) => execSync(cmd, { stdio: "inherit" })
@@ -23,6 +24,10 @@ try {
   await browser.eval("window.dispatchEvent(new KeyboardEvent('keydown', {altKey: true, shiftKey: true, code: 'KeyS'}))")
   await browser.sleep(500)
   check(await browser.eval("!document.querySelector('.hs-studio')"), "site: the studio can't be opened in a build")
+  // Articles stay out of builds until site.config.ts says they're live.
+  const articlesLive = /articlesLive\s*=\s*true/.test(fs.readFileSync("apps/site/site.config.ts", "utf8"))
+  check(await browser.eval("!!document.querySelector('a[href=\"/experiments\"]')") === articlesLive,
+    articlesLive ? "site: articles are linked (articlesLive)" : "site: articles aren't in the build yet")
   check(browser.errors.length === 0, `site: no errors (${browser.errors.join(" | ")})`)
   browser.errors.length = 0
 

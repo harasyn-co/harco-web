@@ -33,6 +33,8 @@ describe("layers and models in scenes", () => {
     expect(validateScene({ particles: { model: "lite" } })).toEqual([])
     expect(validateScene({ layers: [{ id: "head", share: 0.2, model: "type", space: "screen", at: [0, 0.6], scale: 0.7, source: { type: "text", text: "hi" } }] })).toEqual([])
     expect(validateScene({ layers: [] })).toEqual([])
+    expect(validateScene({ motion: { instant: true }, layers: [{ id: "page", share: 0.5, model: "print", space: "screen", source: { type: "raster", src: "/page.png" } }] })).toEqual([])
+    expect(validateScene({ source: { type: "raster" } })[0]).toMatch(/src/)
   })
 
   it("names bad layers", () => {
@@ -44,6 +46,6 @@ describe("layers and models in scenes", () => {
 
   it("keeps Sculpt as the engine's original flight", () => {
     expect(MODELS.sculpt.flight).toEqual([0.6, 1.8, 0.9, 3])
-    expect(MODEL_NAMES).toEqual(["sculpt", "type", "relief", "wave", "lite"])
+    expect(MODEL_NAMES).toEqual(["sculpt", "type", "relief", "wave", "lite", "print"])
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { validateScene } from "../src/validate"
 import { applyPatch, DEFAULT_SCENE, PALETTES } from "../src/scene"
+import { FORM_NAMES } from "../src/sources/forms"
 
 describe("validateScene", () => {
   it("accepts the default scene and typical patches", () => {
@@ -9,6 +10,11 @@ describe("validateScene", () => {
     expect(validateScene({ source: { type: "text", text: "hello" } })).toEqual([])
     expect(validateScene({ motion: { autoplay: { forms: [{ type: "text", text: "hi" }, "cells"], hold: 8 } } })).toEqual([])
     expect(validateScene({ motion: { autoplay: null } })).toEqual([])
+  })
+
+  it("accepts every built-in form, in a source and in autoplay", () => {
+    for (const form of FORM_NAMES) expect(validateScene({ source: { type: "shape", form } })).toEqual([])
+    expect(validateScene({ motion: { autoplay: { forms: FORM_NAMES, hold: 8 } } })).toEqual([])
   })
 
   it("names each bad setting in plain words", () => {

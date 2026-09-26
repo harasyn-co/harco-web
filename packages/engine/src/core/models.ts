@@ -6,9 +6,16 @@
 //            onto its point; fast-moving points need a wider reach
 //   size:    multiplier on the style's particle size
 //   snap:    align particles to the pixel grid (crisp text and UI)
+//   instant: no flight: particles are on their points (or at rest) at once
+//   form:    with instant, seconds to gather out of dust spread across the
+//            view instead of appearing at once
+//   dissolve: seconds a removed layer takes to scatter back out into the view
+//   pointSize: size relative to the layer's own units, drawn as square
+//            pixels whatever the style: 1 = one source pixel of a raster
+//            (pre-rendered text: one particle per pixel, at any scale)
 //   budget:  share of the auto particle count to use (Lite only)
 //   dprCap:  highest pixel ratio to render at (Lite only)
-export type ModelName = "sculpt" | "type" | "relief" | "wave" | "lite"
+export type ModelName = "sculpt" | "type" | "relief" | "wave" | "lite" | "print"
 
 export interface ParticleModel {
   label: string
@@ -17,6 +24,10 @@ export interface ParticleModel {
   capture: number
   size: number
   snap: boolean
+  instant?: boolean
+  form?: number
+  dissolve?: number
+  pointSize?: number
   budget?: number
   dprCap?: number
 }
@@ -63,6 +74,18 @@ export const MODELS: Record<ModelName, ParticleModel> = {
     snap: false,
     budget: 0.5,
     dprCap: 1,
+  },
+  print: {
+    label: "Print",
+    description: "Pre-rendered text and UI: one particle per pixel, gathering out of dust across the view into exact type.",
+    flight: [3, 8, 0, 12],
+    capture: 1,
+    size: 1,
+    snap: true,
+    instant: true,
+    form: 1.2,
+    dissolve: 0.7,
+    pointSize: 1,
   },
 }
 

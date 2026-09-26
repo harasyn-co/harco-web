@@ -26,12 +26,15 @@ void main() {
   Particle p = fetchParticle(uFirst + (gl_VertexID - uFirst) * uStride);
   float k;
   gl_Position = project(p.world, k);
-  if (uPixelSnap > 0.5) {
-    // Crisp text and UI: land each particle on the centre of a pixel.
-    vec2 px = (gl_Position.xy * 0.5 + 0.5) * uResolution;
-    gl_Position.xy = ((floor(px) + 0.5) / uResolution) * 2.0 - 1.0;
-  }
   vSize = max(1.0, uPointSize * k);
+  if (uPixelSnap > 0.5) {
+    // Crisp text and UI: cover whole device pixels. An odd-sized point
+    // centres on a pixel, an even-sized one on the corner between pixels.
+    vSize = floor(vSize + 0.5);
+    vec2 px = (gl_Position.xy * 0.5 + 0.5) * uResolution;
+    vec2 c = mod(vSize, 2.0) > 0.5 ? floor(px) + 0.5 : floor(px + 0.5);
+    gl_Position.xy = (c / uResolution) * 2.0 - 1.0;
+  }
   gl_PointSize = vSize;
   vColor = shade(p);
   // Darker particles get sparser characters; the first is usually a space.

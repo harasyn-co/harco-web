@@ -33,6 +33,13 @@ export type SourceSpec =
       type: "text"; text: string; glyphs?: "strokes" | "matrix" | "font"; weight?: number
       font?: string; width?: number; speed?: number; cursor?: boolean; density?: number; seed?: Vec4
     }
+  /**
+   * A pre-rendered image (white ink on black): every inked pixel becomes a
+   * particle, in pixel units from the top-left corner. For text and UI that
+   * must be exact; place it with a screen layer scaled to CSS px, drawn with
+   * the print model.
+   */
+  | { type: "raster"; src: string; threshold?: number; seed?: Vec4 }
 
 export interface Palette {
   /** Page background. */
@@ -141,6 +148,8 @@ export interface LayerSpec {
   at?: [number, number] | [number, number, number]
   /** Size multiplier. */
   scale?: number
+  /** Show at once, skipping the model's formation (e.g. text scrolled into view). */
+  instant?: boolean
 }
 
 export type Via = "direct" | "reservoir"
@@ -171,6 +180,8 @@ export interface MotionSpec {
   via: Via
   /** Cycle through forms (or any sources) on its own. Null to stay put. */
   autoplay: null | { forms: (FormName | SourceSpec)[]; hold: number }
+  /** Changes land at once, with no flight (e.g. while UI is showing). */
+  instant: boolean
 }
 
 export interface Scene {
@@ -180,8 +191,18 @@ export interface Scene {
   particles: ParticleSpec
   reservoir: ReservoirSpec
   motion: MotionSpec
+  /** Where the main source sits: like a layer's placement. */
+  place: PlaceSpec
   /** Extra layers over the base source, drawn in order. */
   layers: LayerSpec[]
+}
+
+export interface PlaceSpec {
+  space: "world" | "screen"
+  at: [number, number] | [number, number, number]
+  scale: number
+  /** False lets the main source's particles go to rest, leaving the layers. */
+  visible: boolean
 }
 
 export type ScenePatch = {
@@ -247,7 +268,8 @@ export const DEFAULT_SCENE: Scene = {
   camera: { projection: "perspective", yaw: 0, pitch: 15, spin: 4.5, zoom: 1, drag: true },
   particles: { count: "auto", model: "sculpt" },
   reservoir: { mode: "band", height: 0.12, opacity: 0.55, drift: 0.05 },
-  motion: { gather: 3, scatter: 2.5, reserve: 0.12, via: "direct", autoplay: null },
+  motion: { gather: 3, scatter: 2.5, reserve: 0.12, via: "direct", autoplay: null, instant: false },
+  place: { space: "world", at: [0, 0, 0], scale: 1, visible: true },
   layers: [],
 }
 

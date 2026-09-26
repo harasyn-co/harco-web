@@ -44,6 +44,15 @@ Unlocks: every phase below.
 
 ## Phase 2: Articles on the site
 
+**In progress (dev only; `articlesLive` in `apps/site/site.config.ts`).**
+Decided 2026-09-25: all text is drawn by particles, with nothing selectable
+and no text shipped to the browser. Pages are laid out with real fonts at
+build time (`npm run bake -w @harasyn/site`, headless Chrome), cut into
+tiles at 1x and 2x, and drawn as raster layers, one particle per pixel.
+Placeholder articles for now. Open: accessibility (screen readers, zoom,
+translation), search indexing (static pages carry only title and summary),
+and a dev-server watcher that re-bakes on save.
+
 - **Content layer.** Articles come from Markdown files in the repo through a
   small adapter (list, get by slug, metadata), so a CMS can replace the files
   later without touching the pages.
@@ -55,7 +64,7 @@ Unlocks: every phase below.
 - Accessible and indexable: real headings and text in the page, not only in
   particles.
 
-Open: the article list design, and when the insights link goes live.
+Open: the article list design, and when the experiments link goes live.
 
 ## Phase 3: Harmonics as a frequency visualiser
 

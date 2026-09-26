@@ -7,6 +7,7 @@ import { FORMS, type FormName } from "../sources/forms"
 import { compileSdf, type SdfProgram } from "../sources/sdf"
 import { compileCurve, CURVES, type CurveProgram } from "../sources/curve"
 import { compileText, type TextProgram } from "../sources/text"
+import { compileRaster, RASTER_THRESHOLD, type RasterProgram } from "../sources/raster"
 import { SHADING_UNIFORMS } from "../styles/shading"
 import { POINTS_FRAG, POINTS_VERT, SHAPE } from "../styles/points"
 import { STREAKS_FRAG, STREAKS_VERT } from "../styles/streaks"
@@ -94,6 +95,12 @@ export interface Field {
   getView(): { yaw: number; pitch: number }
   stats(): FieldStats
   /**
+   * Where a box on the page (CSS px, as from getBoundingClientRect) sits for a
+   * screen-space layer: `at` for its centre, and its size in world units (a
+   * text source's `width`, or width / source width for `scale`).
+   */
+  fit(rect: { left: number; top: number; width: number; height: number }): { at: [number, number]; width: number; height: number }
+  /**
    * A JPEG snapshot of the next frame as a data URL, at most `width` CSS px
    * wide (for thumbnails and previews).
    */
@@ -123,7 +130,7 @@ function sideFor(count: Scene["particles"]["count"], sideScale: number, budget: 
 
 // Particles in flight latch on this close at least, whatever the model:
 // curves draw themselves fast, so they need a wide reach.
-const MIN_CAPTURE: Record<SourceSpec["type"], number> = { shape: 0, sdf: 0, curve: 0.3, text: 0.1 }
+const MIN_CAPTURE: Record<SourceSpec["type"], number> = { shape: 0, sdf: 0, curve: 0.3, text: 0.1, raster: 0 }
 
 /** A source being drawn, with its own rows of particles and its own model. */
 interface Layer {
@@ -137,11 +144,17 @@ interface Layer {
   at: number[]
   scale: number
   rows: [number, number]
+  /** Skip the model's formation. */
+  instant: boolean
+  /** Share of the particles (kept here, as a leaving layer is no longer in the scene). */
+  share: number
+  /** When a removed layer began dissolving; null while it's in the scene. */
+  leaving: number | null
   reset: boolean
   reseedUntil: number
 }
 
-type SourceProgram = SdfProgram | CurveProgram | TextProgram
+type SourceProgram = SdfProgram | CurveProgram | TextProgram | RasterProgram
 
 const TEXT_FONT = '"IBM Plex Mono", ui-monospace, Menlo, monospace'
 
@@ -164,7 +177,7 @@ function curveParts(source: Extract<SourceSpec, { type: "curve" }>) {
 
 const UPDATE_UNIFORMS = [
   "uPos", "uVel", "uAnchor", "uModel", "uTime", "uDt", "uPresence", "uReserve", "uDir",
-  "uView", "uCamera", "uReservoir", "uCapture", "uFlight", "uLayer", "uRestDim", "uSnap", "uReset",
+  "uView", "uCamera", "uReservoir", "uCapture", "uFlight", "uLayer", "uRestDim", "uSnap", "uForm", "uFormAge", "uDissolve", "uReset",
 ] as const
 const POINTS_UNIFORMS = [...SHADING_UNIFORMS, "uPointSize", "uGlyphCount", "uGain", "uShape", "uAtlas", "uStride", "uFirst", "uResolution", "uPixelSnap"] as const
 const STREAKS_UNIFORMS = [...SHADING_UNIFORMS, "uTrail"] as const
@@ -265,7 +278,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     particles = new PingPong(gl!, side, 2)
     anchors = new PingPong(gl!, side, 2)
     resetParticles = true
-    assignRows()
+    assignRows(true)
   }
   buildPrograms()
 
@@ -289,6 +302,16 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       if (!p) programs.set(key, (p = compileText(gl!, options)))
       return p
     }
+    if (source.type === "raster") {
+      const threshold = source.threshold ?? RASTER_THRESHOLD
+      const key = `raster:${threshold}:${source.src}`
+      let p = programs.get(key)
+      if (!p) {
+        programs.set(key, (p = compileRaster(gl!, source.src, threshold, (err) => console.error(err))))
+        evictRasters()
+      }
+      return p
+    }
     if (source.type === "curve") {
       const { glsl, length, duration } = curveParts(source)
       const key = `curve:${length}:${duration}:${glsl}`
@@ -303,22 +326,39 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     return p
   }
 
+  // Raster textures add up while scrolling through pages; keep the most
+  // recent few (Map order is insertion order) that aren't on screen.
+  const MAX_RASTERS = 24
+  function evictRasters() {
+    const rasters = [...programs.keys()].filter((k) => k.startsWith("raster:"))
+    const inUse = new Set(allLayers().map((l) => l.program))
+    for (const key of rasters.slice(0, Math.max(0, rasters.length - MAX_RASTERS))) {
+      const p = programs.get(key)!
+      if (inUse.has(p)) continue
+      if ("dispose" in p) p.dispose()
+      programs.delete(key)
+    }
+  }
+
   const randomSeed = (): Vec4 => [Math.random(), Math.random(), Math.random(), Math.random()]
-  const defaultModel = (source: SourceSpec): ModelName => (source.type === "text" ? "type" : "sculpt")
+  const defaultModel = (source: SourceSpec): ModelName => (source.type === "text" ? "type" : source.type === "raster" ? "print" : "sculpt")
 
   // The base layer is the scene's source; extra layers come from scene.layers.
   const base: Layer = {
     id: "base", spec: scene.source, program: programFor(scene.source), seed: scene.source.seed ?? randomSeed(), since: 0,
-    model: scene.particles.model, space: "world", at: [0, 0, 0], scale: 1, rows: [0, 0], reset: true, reseedUntil: -1,
+    model: scene.particles.model, space: "world", at: [0, 0, 0], scale: 1, rows: [0, 0], instant: false, share: 0, leaving: null, reset: true, reseedUntil: -1,
   }
+  const placeBase = () => Object.assign(base, { space: scene.place.space ?? "world", at: scene.place.at ?? [0, 0, 0], scale: scene.place.scale ?? 1 })
+  placeBase()
   let extra: Layer[] = []
   const allLayers = () => [base, ...extra]
 
-  // Rows follow the shares; a layer whose rows moved starts its points afresh.
-  function assignRows() {
-    const ranges = allocateRows(side, extra.map((l) => scene.layers.find((s) => s.id === l.id)?.share ?? 0.1))
+  // Rows follow the shares. Rows that change hands keep their points, so a
+  // layer builds out of what was there; fresh textures (`all`) start afresh.
+  function assignRows(all = false) {
+    const ranges = allocateRows(side, extra.map((l) => l.share))
     allLayers().forEach((l, i) => {
-      if (l.rows[0] !== ranges[i][0] || l.rows[1] !== ranges[i][1]) l.reset = true
+      if (all) l.reset = true
       l.rows = ranges[i]
     })
   }
@@ -340,13 +380,40 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
         at: s.at ?? [0, 0, 0],
         scale: s.scale ?? 1,
         rows: old?.rows ?? [0, 0],
-        reset: !old,
+        instant: !!s.instant,
+        share: s.share,
+        leaving: null,
+        reset: false,
         reseedUntil: sameSource ? old.reseedUntil : t + RESEED_CHANGE_TIME,
       })
     }
+    // Layers whose model dissolves (print) stay a moment after they're
+    // removed, their particles scattering back out into the view. New layers that
+    // form (print) start as the old ones are mostly gone, so the two don't
+    // crowd each other.
+    // (A page, not a stray bit of UI like a link: enough of the particles.)
+    const leavingShare = extra
+      .filter((l) => l.leaving !== null || !next.some((n) => n.id === l.id) && !!MODELS[l.model]?.dissolve)
+      .reduce((sum, l) => sum + l.share, 0)
+    const clearing = leavingShare > 0.02
+    if (clearing && !reduced) {
+      for (const n of next) {
+        const fresh = !extra.some((l) => l.id === n.id)
+        if (fresh && MODELS[n.model]?.form) n.since = t + (MODELS[n.model]?.dissolve ?? 0) * 0.5
+      }
+    }
+    for (const l of extra) {
+      if (next.some((n) => n.id === l.id)) continue
+      if (reduced || !MODELS[l.model]?.dissolve || l.rows[1] <= l.rows[0]) continue
+      next.push({ ...l, leaving: l.leaving ?? t })
+    }
+    const wasPrinting = printing()
     extra = next
     assignRows()
+    // After creation has finished (resize reads state set up later on).
+    if (printing() !== wasPrinting) queueMicrotask(resize)
   }
+  function printing() { return allLayers().some((l) => !!MODELS[l.model]?.pointSize) }
 
   // Time, presence and the pending trip through the reservoir.
   const t0 = performance.now()
@@ -354,6 +421,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   let presence = 0
   let presenceTarget = 0
   let presenceRate = 1
+  let baseShow = 1
   let dir = 1
   let pending: { source: SourceSpec; program: SourceProgram; seed: Vec4; resumeAt: number } | null = null
   let nextAuto = Infinity
@@ -441,12 +509,17 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
   // How large the scene is drawn, relative to a typical desktop view.
   let viewScale = 1
   const viewVec = new Float32Array(2)
+  let cssPerWorld = 1
   const proj = new Float32Array(4)
   function resize() {
     const cssW = canvas.clientWidth
     const cssH = canvas.clientHeight
     if (!cssW || !cssH) return
-    dpr = Math.min(window.devicePixelRatio || 1, QUALITY[quality].dprCap, baseModel().dprCap ?? Infinity)
+    // Print layers must land on real pixels, so they get the device's own
+    // ratio whatever the quality level.
+    dpr = printing()
+      ? Math.min(window.devicePixelRatio || 1, 3)
+      : Math.min(window.devicePixelRatio || 1, QUALITY[quality].dprCap, baseModel().dprCap ?? Infinity)
     width = Math.round(cssW * dpr)
     height = Math.round(cssH * dpr)
     canvas.width = width
@@ -457,6 +530,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     const halfW = cssW / 2 / ppu
     const halfH = cssH / 2 / ppu
     viewVec.set([halfW, halfH])
+    cssPerWorld = ppu
     proj.set([1 / halfW, 1 / halfH, CAMERA_DISTANCE, scene.camera.projection === "perspective" ? 1 : 0])
   }
   resize()
@@ -501,6 +575,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       }
     }
     base.model = scene.particles.model
+    placeBase()
     const budgetChanged = (MODELS[prev.particles.model]?.budget ?? 1) !== (baseModel().budget ?? 1)
     if (scene.particles.count !== prev.particles.count || budgetChanged) { allocate(); snapUntil = t + SNAP_TIME }
     if (patch.motion?.autoplay !== undefined) scheduleAuto()
@@ -602,10 +677,16 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     // Presence eases towards its target at a steady rate.
     const dp = presenceTarget - presence
     presence += Math.sign(dp) * Math.min(Math.abs(dp), presenceRate * dt)
+    if (scene.motion.instant) presence = presenceTarget
+    // The main source can be hidden on its own, at the gather and scatter pace.
+    const showTarget = scene.place.visible === false ? 0 : 1
+    const ds = showTarget - baseShow
+    baseShow += Math.sign(ds) * Math.min(Math.abs(ds), dt / Math.max(0.1, ds > 0 ? scene.motion.gather : scene.motion.scatter))
+    if (reduced || scene.motion.instant) baseShow = showTarget
 
     // A trip through the reservoir: once let go, pause, then gather the next.
     if (pending) {
-      if (pending.resumeAt === Infinity && presence <= 0.001) pending.resumeAt = t + RESERVOIR_PAUSE + scene.motion.scatter * 0.4
+      if (pending.resumeAt === Infinity && presence <= 0.001) pending.resumeAt = scene.motion.instant ? t : t + RESERVOIR_PAUSE + scene.motion.scatter * 0.4
       if (t >= pending.resumeAt) {
         base.reset = true
         activate(pending.source, pending.program, pending.seed)
@@ -641,6 +722,14 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     gl!.disable(gl!.BLEND)
     gl!.viewport(0, 0, side, side)
     gl!.enable(gl!.SCISSOR_TEST)
+    // Dissolved layers go, and their particles with them.
+    const gone = extra.filter((l) => l.leaving !== null && t - l.leaving > (MODELS[l.model]?.dissolve ?? 0))
+    if (gone.length) {
+      const wasPrinting = printing()
+      extra = extra.filter((l) => !gone.includes(l))
+      assignRows()
+      if (printing() !== wasPrinting) resize()
+    }
     const layers = allLayers().filter((l) => l.rows[1] > l.rows[0])
 
     // 1. Anchors onto the surface, each layer in its own rows.
@@ -658,6 +747,14 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.uniform1f(sp.u.uReseed, t < l.reseedUntil ? RESEED_CHANGE : RESEED_REST)
       gl!.uniform1f(sp.u.uReset, l.reset ? 1 : 0)
       if ("range" in sp) gl!.uniform2f(sp.uRange, sp.range[0], sp.range[1])
+      if ("raster" in sp) {
+        const x = sp.raster
+        bindTextures(gl!, 1, [[x.extra.uPoints, x.points]])
+        gl!.uniform1i(x.extra.uPointsSide, x.side)
+        gl!.uniform1i(x.extra.uPointCount, Math.min(x.count, (l.rows[1] - l.rows[0]) * side))
+        gl!.uniform1i(x.extra.uSide, side)
+        gl!.uniform1i(x.extra.uRow0, l.rows[0])
+      }
       if ("text" in sp) {
         const x = sp.text
         bindTextures(gl!, 1, [[sp.extra.uPoints, x.points], [sp.extra.uNormalPrev, anchors.read.textures[1]]])
@@ -693,8 +790,6 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     ])
     gl!.uniform1f(uu.uTime, clock)
     gl!.uniform1f(uu.uDt, dt)
-    gl!.uniform1f(uu.uPresence, reduced ? presenceTarget : presence)
-    gl!.uniform1f(uu.uReserve, clamp(scene.motion.reserve, 0, 1))
     gl!.uniform1f(uu.uDir, dir)
     gl!.uniform2f(uu.uCamera, proj[2], proj[3])
     gl!.uniform2f(uu.uView, viewVec[0], viewVec[1])
@@ -706,7 +801,6 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     const resting = "text" in bp ? Math.max(reserve, 1 - bp.text.density - bp.text.cursor[3]) : reserve
     restDim += (Math.min(1, reserve / resting) - restDim) * (1 - Math.exp(-dt * 1.5))
     gl!.uniform1f(uu.uRestDim, restDim)
-    gl!.uniform1f(uu.uSnap, snap ? 1 : 0)
     gl!.uniform1f(uu.uReset, resetParticles ? 1 : 0)
     for (const l of layers) {
       const m = MODELS[l.model] ?? MODELS.sculpt
@@ -714,6 +808,18 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.uniformMatrix3fv(uu.uModel, false, modelOf(l))
       gl!.uniform1f(uu.uCapture, Math.max(m.capture, MIN_CAPTURE[l.spec.type] ?? 0))
       gl!.uniform4fv(uu.uFlight, m.flight)
+      // Instant: no flight, on the form or at rest at once.
+      gl!.uniform1f(uu.uSnap, snap || scene.motion.instant || m.instant ? 1 : 0)
+      // Dust only while a layer is new: later, particles that change hands
+      // (rows shift as layers come and go) take their place at once.
+      const forming = m.form && !reduced && !l.instant && t - l.since < m.form * 1.8 + 0.05
+      gl!.uniform1f(uu.uForm, forming ? m.form! : 0)
+      gl!.uniform1f(uu.uFormAge, t - l.since)
+      gl!.uniform1f(uu.uDissolve, l.leaving === null ? 0 : Math.max(1e-3, (t - l.leaving) / (m.dissolve ?? 1)))
+      // Print layers are UI: always shown, whatever the form is doing.
+      gl!.uniform1f(uu.uPresence, m.pointSize ? 1 : (reduced ? presenceTarget : presence) * (l === base ? baseShow : 1))
+      // Print layers need every particle they were given: none held in reserve.
+      gl!.uniform1f(uu.uReserve, m.pointSize ? 0 : clamp(scene.motion.reserve, 0, 1))
       const at = l.at
       if (l.space === "screen") gl!.uniform4f(uu.uLayer, (at[0] ?? 0) * viewVec[0], (at[1] ?? 0) * viewVec[1], at[2] ?? 0, l.scale)
       else gl!.uniform4f(uu.uLayer, at[0] ?? 0, at[1] ?? 0, at[2] ?? 0, l.scale)
@@ -749,23 +855,30 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.uniform3fv(u.uLoose, colors.loose)
     }
     // Every layer draws its own rows, with its model's size and snapping.
-    const drawPoints = (shape: number, size: number, gain: number, stride = 1) => {
+    // Print layers (a fixed pixel size) are always square pixels, whatever
+    // the style, so pre-rendered text stays exact.
+    const isPrint = (l: Layer) => !!(MODELS[l.model] ?? MODELS.sculpt).pointSize
+    const drawPoints = (shape: number, size: number, gain: number, stride = 1, which: (l: Layer) => boolean = () => true) => {
       gl!.useProgram(points)
       const a = shape === SHAPE.glyph ? ensureAtlas() : null
       if (a) bindTextures(gl!, 3, [[pu.uAtlas, a.tex]])
-      gl!.uniform1i(pu.uShape, shape)
       gl!.uniform1f(pu.uGlyphCount, a?.count ?? 1)
       gl!.uniform1f(pu.uGain, gain)
-      gl!.uniform1i(pu.uStride, stride)
       gl!.uniform2f(pu.uResolution, gl!.drawingBufferWidth, gl!.drawingBufferHeight)
       for (const l of layers) {
+        if (!which(l)) continue
         const m = MODELS[l.model] ?? MODELS.sculpt
+        const print = isPrint(l)
         shading(pu, modelOf(l))
-        gl!.uniform1f(pu.uPointSize, shape === SHAPE.glyph ? size : size * m.size)
-        gl!.uniform1f(pu.uPixelSnap, m.snap && shape !== SHAPE.glyph ? 1 : 0)
+        gl!.uniform1i(pu.uShape, print ? SHAPE.square : shape)
+        gl!.uniform1i(pu.uStride, print ? 1 : stride)
+        // A print particle covers its own footprint: the layer's scale is
+        // world units per source pixel, so a 2x raster draws half-size.
+        gl!.uniform1f(pu.uPointSize, print ? m.pointSize! * l.scale * cssPerWorld * dpr : shape === SHAPE.glyph ? size : size * m.size)
+        gl!.uniform1f(pu.uPixelSnap, m.snap && (print || shape !== SHAPE.glyph) ? 1 : 0)
         const first = l.rows[0] * side
         gl!.uniform1i(pu.uFirst, first)
-        gl!.drawArrays(gl!.POINTS, first, Math.ceil(((l.rows[1] - l.rows[0]) * side) / stride))
+        gl!.drawArrays(gl!.POINTS, first, Math.ceil(((l.rows[1] - l.rows[0]) * side) / (print ? 1 : stride)))
       }
     }
 
@@ -779,7 +892,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.clear(gl!.COLOR_BUFFER_BIT)
       gl!.enable(gl!.BLEND)
       gl!.blendFunc(gl!.ONE, gl!.ONE)
-      drawPoints(SHAPE.round, 1, 0)
+      drawPoints(SHAPE.round, 1, 0, 1, (l) => !isPrint(l))
       gl!.disable(gl!.BLEND)
 
       gl!.bindFramebuffer(gl!.FRAMEBUFFER, null)
@@ -797,6 +910,13 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       const ink = st.ascii.color === "shade" ? null : hexToRgb(st.ascii.color)
       gl!.uniform4f(au.uInk, ink?.[0] ?? 0, ink?.[1] ?? 0, ink?.[2] ?? 0, ink ? 1 : 0)
       gl!.drawArrays(gl!.TRIANGLES, 0, 3)
+      // Print layers go on top as they are, not through the character grid.
+      if (layers.some(isPrint)) {
+        gl!.enable(gl!.BLEND)
+        gl!.blendFunc(gl!.ONE, gl!.ONE_MINUS_SRC_ALPHA)
+        drawPoints(SHAPE.square, 1, 0, 1, isPrint)
+        gl!.disable(gl!.BLEND)
+      }
       flushCaptures()
       return
     }
@@ -821,6 +941,7 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
       gl!.useProgram(streaks)
       gl!.uniform1f(su.uTrail, st.streaks.length)
       for (const l of layers) {
+        if (isPrint(l)) continue
         shading(su, modelOf(l))
         gl!.drawArrays(gl!.LINES, l.rows[0] * side * 2, (l.rows[1] - l.rows[0]) * side * 2)
       }
@@ -839,6 +960,17 @@ export function createField(canvas: HTMLCanvasElement, initial: ScenePatch = {},
     gather,
     getView: () => ({ yaw: ((view.yaw % 360) + 360) % 360, pitch: view.pitch }),
     capture: (w = 240) => new Promise<string>((resolve) => captures.push({ width: w, resolve })),
+    fit: (rect) => {
+      const box = canvas.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2 - box.left
+      const cy = rect.top + rect.height / 2 - box.top
+      const [halfW, halfH] = viewVec
+      return {
+        at: [(cx / Math.max(1, box.width)) * 2 - 1, 1 - (cy / Math.max(1, box.height)) * 2],
+        width: (rect.width / Math.max(1, box.width)) * 2 * halfW,
+        height: (rect.height / Math.max(1, box.height)) * 2 * halfH,
+      }
+    },
     stats: () => ({ fps: Math.round(fps), particles: side * side, quality, reducedMotion: reduced, viewScale: Math.round(viewScale * 100) / 100 }),
     debug() {
       const read = (target: { fb: WebGLFramebuffer }, attachment: number) => {
