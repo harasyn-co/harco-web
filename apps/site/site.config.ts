@@ -9,7 +9,7 @@
  * To preview another version locally without changing this file:
  *   SITE_VERSION=v1 npm run dev
  */
-export const liveVersion = "v2"
+export const liveVersion = "v1"
 
 /**
  * The version whose looks the engine playground's studio saves to, so a look
@@ -22,4 +22,4 @@ export const studioVersion = "v2"
  * Whether articles (/experiments) are in the production build. They always run
  * in development. To preview a build with them: SITE_ARTICLES=1 npm run build
  */
-export const articlesLive = true
+export const articlesLive = false
