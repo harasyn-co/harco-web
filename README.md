@@ -1,15 +1,12 @@
 # harco
 
-Monorepo for harasyn.co and the particle engine behind it.
+Monorepo for harasyn.co and its studio, built on Plenum, the particle engine
+(private, in [harasyn-co/plenum](https://github.com/harasyn-co/plenum)).
 
 ```
-apps/site/         harasyn.co (React + Vite). Deploys to GitHub Pages on push to main.
-apps/studio/       Particle Studio (studio.harasyn.co): the engine with every setting
-                   as a control, for exploring designs and saving looks to the site.
-packages/engine/   @harasyn/engine: particles that gather into shapes, harmonics,
-                   math, images and UI. Framework-free, with a thin React wrapper.
-packages/panel/    @harasyn/panel: the control panel used by the studio and, in
-                   development only, by the site.
+apps/site/     harasyn.co (React + Vite). Deploys to GitHub Pages on push to main.
+apps/studio/   Particle Studio (studio.harasyn.co): the engine with every setting
+               as a control, for exploring designs and saving looks to the site.
 ```
 
 ## Commands

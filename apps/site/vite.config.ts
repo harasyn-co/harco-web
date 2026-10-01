@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import { articlesLive, liveVersion } from "./site.config"
 import { parseArticle } from "./src/content/parse"
-import { studioLooks } from "../../packages/panel/vite"
+import { studioLooks } from "@harasyn-co/plenum-panel/vite"
 
 const VIRTUAL_ID = "virtual:site-version"
 const RESOLVED_ID = "\0" + VIRTUAL_ID

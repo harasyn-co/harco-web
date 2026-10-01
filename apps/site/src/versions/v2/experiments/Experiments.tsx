@@ -1,7 +1,7 @@
 // The articles: a list at /experiments and a reading view at /experiments/<slug>,
 // drawn entirely in particles from baked tiles (see baked.tsx).
 import { useEffect, useRef, useState } from "react"
-import type { Field } from "@harasyn/engine"
+import type { Field } from "@harasyn-co/plenum"
 import { navigate } from "../router"
 import { BakedPage, pages, pick, preload } from "./baked"
 import "./reading.css"

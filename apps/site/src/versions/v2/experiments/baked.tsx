@@ -6,7 +6,7 @@
 // Pages are baked at 1x and 2x; high-density screens take 2x, one particle
 // per device pixel, and need a larger pool of particles (DENSE_COUNT).
 import { useEffect, useRef } from "react"
-import { preloadRaster, type Field, type LayerSpec } from "@harasyn/engine"
+import { preloadRaster, type Field, type LayerSpec } from "@harasyn-co/plenum"
 import manifest from "../../../../baked/manifest.json"
 import { Link } from "../router"
 

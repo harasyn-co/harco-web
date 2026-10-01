@@ -5,10 +5,10 @@
 //   saving commits them to main, which needs the owner key: a GitHub token
 //   that can write to the repo, kept in this browser only. Anyone can also
 //   keep looks in their own browser.
-import { createField, FORM_NAMES, type Field } from "@harasyn/engine"
+import { createField, FORM_NAMES, type Field } from "@harasyn-co/plenum"
 import {
   browserLooksStore, checkGitHubToken, cleanToken, devLooksStore, githubLooksStore, mountStudio, sceneFromHash, type LooksLibrary,
-} from "@harasyn/panel"
+} from "@harasyn-co/plenum-panel"
 
 // Where the site keeps its looks (set in vite.config.ts from the site's config).
 declare const __SITE_LOOKS__: { repo: string; path: string; branch: string; url: string }

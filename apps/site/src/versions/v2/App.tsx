@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { DEFAULT_SCENE, type Field as EngineField, type FormName, type ScenePatch } from "@harasyn/engine"
-import { Field } from "@harasyn/engine/react"
+import { DEFAULT_SCENE, type Field as EngineField, type FormName, type ScenePatch } from "@harasyn-co/plenum"
+import { Field } from "@harasyn-co/plenum/react"
 import looks from "./looks.json"
 import { Wordmark } from "./components/wordmark"
 import { Link, usePath } from "./router"

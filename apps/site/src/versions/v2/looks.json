@@ -226,7 +226,7 @@
         "kind": "dots",
         "size": 1.5,
         "opacity": 1,
-        "palette": "v1"
+        "palette": "dusk"
       },
       "camera": {
         "projection": "perspective",

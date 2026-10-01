@@ -11,11 +11,14 @@ on:
     branches: [main]
     paths:
       - "apps/studio/**"
-      - "packages/**"
       - "apps/site/site.config.ts"
       - "package-lock.json"
       - ".github/workflows/studio.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
 
 concurrency:
   group: studio
@@ -31,8 +34,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: "@harasyn-co"
 
       - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm test
 
       # The gate refuses to run without the access key, so the studio is

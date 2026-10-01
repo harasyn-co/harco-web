@@ -1,6 +1,6 @@
 import path from "node:path"
 import { defineConfig } from "vite"
-import { studioLooks } from "../../packages/panel/vite"
+import { studioLooks } from "@harasyn-co/plenum-panel/vite"
 import { studioVersion } from "../site/site.config"
 
 // The site version whose looks the studio edits.
