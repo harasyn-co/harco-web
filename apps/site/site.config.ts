@@ -9,7 +9,7 @@
  * To preview another version locally without changing this file:
  *   SITE_VERSION=v1 npm run dev
  */
-export const liveVersion = "v1"
+export const liveVersion = "v2"
 
 /**
  * The version whose looks the engine playground's studio saves to, so a look
